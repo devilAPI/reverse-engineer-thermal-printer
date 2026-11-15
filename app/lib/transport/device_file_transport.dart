@@ -10,7 +10,7 @@ import 'transport.dart';
 ///  * macOS:  /dev/cu.usbmodem*, /dev/cu.* (BT name) (CDC / paired SPP)
 ///
 /// Linux needs write permission: add user to `lp`/`dialout` or install the
-/// udev rule from /linux/99-thermal-printer.rules.
+/// udev rule from /linux/70-thermal-printer.rules.
 class DeviceFileTransport implements PrinterTransport {
   @override
   String get name => 'device';

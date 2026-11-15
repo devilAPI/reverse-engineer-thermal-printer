@@ -77,6 +77,8 @@ class PrinterProfile {
     hasCutter: true,
     bandHeight: 255,
     chunkSize: 4096,
+    // measured 2026-11-15: STM32 "POS80 Printer USB", printer class 07/01/02
+    usbIds: [(0x0416, 0x5011)],
   );
 
   static const generic58 = PrinterProfile(
@@ -103,6 +105,18 @@ class PrinterProfile {
   );
 
   static const all = [mp583, hz8360, generic58, generic80];
+
+  /// Best guess for a discovered connection, or null if nothing matches.
+  /// MPT-II firmware advertises Bluetooth names like "MPT-II" / "BL".
+  static PrinterProfile? guess({String? label, int? vid, int? pid}) {
+    for (final p in all) {
+      if (vid != null && p.usbIds.contains((vid, pid))) return p;
+    }
+    final l = (label ?? '').toLowerCase();
+    if (RegExp(r'mpt|mp58|pt-?2\d\d|58mm|pos58|pos-58').hasMatch(l)) return mp583;
+    if (RegExp(r'8360|80mm|pos80|pos-80').hasMatch(l)) return hz8360;
+    return null;
+  }
 
   static PrinterProfile byId(String? id) => all.firstWhere((p) => p.id == id, orElse: () => mp583);
 

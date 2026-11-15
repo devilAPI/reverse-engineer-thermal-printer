@@ -6,7 +6,7 @@ docs/hardware/<label>/log.md so the reverse-engineering log writes itself.
 
 Setup (once):
     python3 -m venv tools/.venv && tools/.venv/bin/pip install pyusb pyserial pillow bleak
-    sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+    sudo cp linux/70-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
 
 Typical session:
     tools/.venv/bin/python tools/hwtest.py detect
@@ -600,6 +600,21 @@ def cmd_ble_dump(a, log):
     log.block("\n".join(asyncio.run(run())))
 
 
+def cmd_auto(a, log):
+    """Full first-contact sequence: dump (USB only), status, then the core
+    calibration pages, asking what each one printed."""
+    log.section("auto sequence start")
+    if not a.ble and not a.dev:
+        cmd_dump(a, log)
+    cmd_status(a, log)
+    a.pages = ["text", "ruler", "gradient", "bands", "density", "modes"]
+    if a.width >= 576:
+        a.pages.append("cut")
+    a.image = None
+    a.observe = True
+    cmd_print(a, log)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--label", default="unknown", help="log folder under docs/hardware/")
@@ -620,12 +635,13 @@ def main():
     r = sub.add_parser("raw")
     r.add_argument("hex", help="e.g. '1b 40 0a'")
     r.add_argument("--wait", type=float, default=0.5)
+    sub.add_parser("auto", help="dump + status + calibration pages (interactive)")
     sub.add_parser("ble-scan")
     sub.add_parser("ble-dump")
     a = ap.parse_args()
     log = Log(a.label)
     {"detect": cmd_detect, "dump": cmd_dump, "status": cmd_status, "print": cmd_print, "raw": cmd_raw,
-     "ble-scan": cmd_ble_scan, "ble-dump": cmd_ble_dump}[a.cmd](a, log)
+     "auto": cmd_auto, "ble-scan": cmd_ble_scan, "ble-dump": cmd_ble_dump}[a.cmd](a, log)
     print(f"\nlogged to {log.path.relative_to(ROOT)}")
 
 

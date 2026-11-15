@@ -138,7 +138,7 @@ per line. So the vendor output is poor for photos; we dither ourselves.
 ### 8. Test host
 
 Linux 6.8 (Ubuntu 24.04). `cdc_acm` loaded, `usblp` not yet loaded,
-user not in `lp` group → udev rule `linux/99-thermal-printer.rules` (uaccess).
+user not in `lp` group → udev rule `linux/70-thermal-printer.rules` (uaccess).
 
 ### 9. Research round 2 — official MPT-II manual found
 
@@ -185,14 +185,110 @@ via `ENV{ID_USB_INTERFACES}=="*:0701*"` because the HZ-8360's VID:PID is unknown
 
 ---
 
+## 2026-11-15 — Session 2: HZ-8360 arrives (USB)
+
+### 12. Enumeration
+
+`lsusb` → `Bus 001 Device 014: ID 0416:5011 Winbond Electronics Corp. Virtual Com Port`
+
+| Field | Value |
+|---|---|
+| VID:PID | **0416:5011** (in vendor SDK list; lsusb's name "Virtual Com Port" is just the usb.ids entry) |
+| iManufacturer / iProduct | `STMicroelectronics` / `POS80 Printer USB` → STM32 MCU using Winbond's VID |
+| iSerial | `83600000000` (model number embedded) |
+| bcdUSB / bcdDevice | 2.00 / 2.00, MaxPower 100 mA, 1 interface |
+| Interface | **class 07/01/02 = USB Printer, bidirectional** |
+| Endpoints | EP 0x01 bulk OUT, EP 0x81 bulk IN, 64 B packets |
+| Kernel | `usblp` bound → `/dev/usb/lp0` (root:lp 0660) |
+
+Conclusion: plain printer class ⇒ driverless everywhere: Linux usblp/libusb,
+Windows usbprint.sys, Android USB host, macOS libusb. Bulk IN present ⇒ status readable.
+Full descriptor dump: `docs/hardware/hz8360/usb-descriptors.md`.
+
+Side note: the plug-in watcher first fired on an unrelated Realtek `0bda:8153`
+USB-Ethernet adapter (r8152) — discarded.
+
+### 13. Access, status, first prints
+
+- udev gotcha: the rule was first installed as `99-…` → **no effect**, because
+  `TAG+="uaccess"` is only turned into ACLs by `73-seat-late.rules`; rules must
+  sort before 73. Renamed to `linux/70-thermal-printer.rules` → `getfacl
+  /dev/usb/lp0` shows `user:<you>:rw-`, libusb opens the device.
+- Printer-class control requests `GET_DEVICE_ID` / `GET_PORT_STATUS` → **STALL**
+  (EPIPE): not implemented by the firmware.
+- Real-time status over bulk IN **works** (hwtest `status`):
+
+| Query | Reply | Decoded |
+|---|---|---|
+| `10 04 01` | `16` | online (bit3=0), bit2 = drawer pin high |
+| `10 04 02` | `12` | no cover/feed/paper-stop/error |
+| `10 04 03` | `12` | no cutter/fatal errors |
+| `10 04 04` | `12` | paper OK |
+| `1D 72 01` (GS r 1) | `00` | paper present |
+| `1B 76` (ESC v) | `00` | answered (MPT-style) |
+| `1D 61 FF` / `1D 61 00` (GS a) | `0F` | not the documented 4-byte ASB; meaning unknown |
+| `1D 49 n` (GS I) | none / `00` | no ID strings |
+
+- First print attempts produced **blank** paper of the right length; feed
+  (`ESC d`) and cut (`GS V B 0`) worked. Cause: **paper roll inserted upside
+  down** (thermal coating facing away from head). Flipped → retest.
+  Note for users/docs: blank-but-correct-length output = paper upside down.
+
+### 14. Calibration pages (paper flipped)
+
+All via libusb bulk OUT 0x01, no chunk delay, no errors:
+
+| Page | Result |
+|---|---|
+| text | readable; font/size/bold/align commands honoured |
+| ruler (640-dot raster, 576 box) | full 576 box incl. both edges, labels to 512 → **printable width = 576 dots**, left-aligned at 0, excess silently clipped |
+| gradient (FS / threshold / 16 steps) | good |
+| bands 24…1024 rows per `GS v 0` (up to 72 KB per command) | **all complete** — no buffer limit hit; 130 KB page in 1.9 s (~67 KiB/s, printer-paced via USB NAK) |
+| GS v 0 m=0..3 | OK |
+| ESC * 33 | OK |
+| feed + `GS V B 0` cut | OK |
+
+Consequence: HZ-8360 needs no chunk delay over USB; band height 255 is safe
+(1024 also works).
+
 ## Next: hardware session (to do)
 
-Setup once: `sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger`
+Setup once:
+```sh
+sudo cp linux/70-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+```
 
-For each printer (`H="tools/.venv/bin/python tools/hwtest.py --label <model>"`):
-0. `$H detect` → `$H dump` → `$H status`
-1. `lsusb` before/after plugging → VID:PID
-2. `tools/probe.sh VID:PID` → interface class (07 printer / 02+0A CDC / FF vendor), endpoints, driver
-3. Self-test page (photo it, note firmware version / codepage / BT name)
-4. `tools/escpos_image.py grad.png --width 384|576 --device /dev/usb/lpN` → band/chunk limits
-5. MP583: BLE scan → GATT service table
+### HZ-8360 (USB)
+```sh
+H="tools/.venv/bin/python tools/hwtest.py --label hz8360 --width 576"
+lsusb > /tmp/before; # plug in
+lsusb | diff /tmp/before - ; tools/probe.sh <VID:PID>
+$H detect && $H dump && $H status
+$H print selftest                     # ZJ 1F 11 04 — photograph the page
+$H print text ruler --observe         # printable width / left offset
+$H print gradient bands --observe     # band limit, gaps between bands?
+$H print density modes escstar --observe
+$H print cut beep --observe
+$H print photo --image <jpg> --observe
+```
+Then: app → Model "HZ-8360" → Connection "USB … (printer)" → Test page → photo.
+
+### MP583 (USB-C, then Bluetooth)
+```sh
+H="tools/.venv/bin/python tools/hwtest.py --label mp583 --width 384"
+# USB first, same as above (self-test: hold FEED + press POWER)
+$H detect && $H dump && $H status
+$H print text ruler gradient bands density --observe
+# BLE
+$H ble-scan                            # look for MPT-II / 18F0 / 49535343
+$H --ble <MAC> ble-dump
+$H --ble <MAC> print text gradient --observe
+# Classic SPP (if no BLE)
+bluetoothctl -- pair <MAC>             # PIN 0000
+sudo systemctl stop ModemManager       # else AT commands get printed
+sudo rfcomm bind rfcomm0 <MAC> 1
+$H --dev /dev/rfcomm0 status && $H --dev /dev/rfcomm0 print text gradient --observe
+```
+
+Record for each: VID:PID, interface class, endpoints, kernel driver, status
+replies, max band, darkness command that works, throughput, BLE UUIDs/MTU.

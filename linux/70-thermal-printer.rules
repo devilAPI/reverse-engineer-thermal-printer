@@ -1,4 +1,5 @@
 # Give the logged-in desktop user raw access to cheap ESC/POS thermal printers
+# Must sort before 73-seat-late.rules, which turns TAG+="uaccess" into ACLs.
 # (no driver needed). Install:
 #   sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload && sudo udevadm trigger

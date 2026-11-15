@@ -173,6 +173,20 @@ class _HomePageState extends State<HomePage> {
           found.firstOrNull;
       if (found.isEmpty) _status = 'No printer found. Plug it in / switch it on, then refresh.';
     });
+    final ep = _endpoint;
+    if (ep != null && remembered == null) _autoProfile(ep);
+  }
+
+  /// Switch the model to match a newly chosen connection (USB ID / BT name).
+  void _autoProfile(PrinterEndpoint e) {
+    final g = PrinterProfile.guess(label: e.label, vid: e.usbVendorId, pid: e.usbProductId);
+    if (g == null || g == _profile) return;
+    setState(() {
+      _profile = g;
+      _status = 'Detected ${g.name} from "${e.label}".';
+    });
+    _prefs?.profileId = g.id;
+    _reconvert();
   }
 
   static String _key(PrinterEndpoint e) => '${e.transport}|${e.id}';
@@ -366,7 +380,10 @@ class _HomePageState extends State<HomePage> {
               ],
               onChanged: (e) {
                 setState(() => _endpoint = e);
-                if (e != null) _prefs?.endpointId = _key(e);
+                if (e != null) {
+                  _prefs?.endpointId = _key(e);
+                  _autoProfile(e);
+                }
               },
             ),
           ),

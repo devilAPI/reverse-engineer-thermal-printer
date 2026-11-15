@@ -16,7 +16,7 @@ Chinese ESC/POS thermal receipt printers. Targets:
 | `tools/hwtest.py` | Hardware harness: detect/dump/status/test pages/raw/BLE — auto-logs to `docs/hardware/` |
 | `tools/escpos_render.py` | ESC/POS → PNG emulator to check jobs without paper |
 | `tools/probe.sh`, `tools/escpos_image.py` | Quick USB probe, reference photo encoder |
-| `linux/99-thermal-printer.rules` | udev rule granting the desktop user raw printer access |
+| `linux/70-thermal-printer.rules` | udev rule granting the desktop user raw printer access |
 | `docs/RESEARCH.md` | Protocol & hardware findings with sources |
 | `docs/REVERSE_ENGINEERING_LOG.md` | Step-by-step lab notebook of the reverse engineering |
 | `.github/workflows/` | CI: every push to `master` → tests + Android/Linux/Windows/macOS/iOS/web builds → `dev-N` prerelease; web on GitHub Pages |
@@ -45,7 +45,7 @@ Local testing is done on the **Linux desktop build** only; the other platforms a
 
 ```sh
 sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev
-sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+sudo cp linux/70-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
 cd app
 flutter test
 flutter run -d linux

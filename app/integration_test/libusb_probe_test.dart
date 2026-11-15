@@ -2,9 +2,11 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
 import 'package:thermal_photo/transport/libusb_transport.dart';
 
 void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   test('libusb loads and enumerates without crashing', () async {
     final t = LibusbTransport();
     if (!t.isSupported) {

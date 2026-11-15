@@ -71,7 +71,7 @@ Source: [80XX_Programmer_Manual.pdf](https://blog.lambda.cx/posts/xprinter-wifi/
 
 | Platform | USB | Bluetooth | Network |
 |---|---|---|---|
-| Linux | `/dev/usb/lp*` or `/dev/ttyACM*` (udev rule `linux/99-thermal-printer.rules`); libusb fallback | BLE (`universal_ble`/BlueZ); SPP via `/dev/rfcomm*` | TCP 9100 |
+| Linux | `/dev/usb/lp*` or `/dev/ttyACM*` (udev rule `linux/70-thermal-printer.rules`); libusb fallback | BLE (`universal_ble`/BlueZ); SPP via `/dev/rfcomm*` | TCP 9100 |
 | macOS | libusb (FFI) or `/dev/cu.usbmodem*` if CDC | BLE | TCP 9100 |
 | Windows | printer class: usbprint via SetupAPI + `CreateFile` (no Zadig) — 🔎 [escpos crate](https://docs.rs/crate/escpos/latest/source/examples/usbprint.rs); CDC: inbox usbser.sys → COM port (Win10+, class 02/02) | BLE (WinRT) | TCP 9100 |
 | Android | USB Host API bulk transfer (platform channel) | BLE; SPP optional | TCP 9100 |

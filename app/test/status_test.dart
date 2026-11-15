@@ -45,4 +45,11 @@ void main() {
     expect(densityBytes(DensityCommand.gsE, 0), [0x1D, 0x45, 0]);
     expect(densityBytes(DensityCommand.none, 1), isEmpty);
   });
+
+  test('profile guessing from names', () {
+    expect(PrinterProfile.guess(label: 'BLE MPT-II'), PrinterProfile.mp583);
+    expect(PrinterProfile.guess(label: 'USB POS58 Printer'), PrinterProfile.mp583);
+    expect(PrinterProfile.guess(label: 'Network 192.168.1.87'), isNull);
+    expect(PrinterProfile.guess(label: 'POS-80'), PrinterProfile.hz8360);
+  });
 }
