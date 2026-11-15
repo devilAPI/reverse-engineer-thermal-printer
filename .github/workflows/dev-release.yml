@@ -184,6 +184,8 @@ jobs:
       - name: Build app
         run: |
           flutter pub get
+          # real Win32 FFI checks (SetupAPI enumeration, overlapped I/O, timeouts)
+          flutter test test_windows
           flutter build windows --release --build-number="$BUILD_NUMBER"
           mkdir -p dist
           (cd build/windows/x64/runner/Release && 7z a -tzip "$GITHUB_WORKSPACE/app/dist/thermal-photo-${TAG}-windows-x64.zip" . > /dev/null)

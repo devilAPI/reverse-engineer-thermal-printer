@@ -6,6 +6,7 @@ import 'libusb_transport.dart';
 import 'linux_rfcomm_transport.dart';
 import 'tcp_transport.dart';
 import 'transport.dart';
+import 'windows_com_transport.dart';
 import 'windows_usbprint_transport.dart';
 
 List<PrinterTransport> platformTransports({List<String> manualHosts = const []}) => [
@@ -13,6 +14,7 @@ List<PrinterTransport> platformTransports({List<String> manualHosts = const []})
       DumpFileTransport(),
       LibusbTransport(),
       WindowsUsbPrintTransport(),
+      WindowsComTransport(),
       LinuxRfcommTransport(),
       DeviceFileTransport(),
       TcpTransport(manualHosts: manualHosts),

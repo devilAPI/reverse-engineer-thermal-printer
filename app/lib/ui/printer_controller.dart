@@ -95,7 +95,7 @@ class PrinterController extends ChangeNotifier {
 
   /// Transports whose discovery is instant and local (USB/device nodes):
   /// polled every few seconds so plug/unplug shows up without Refresh.
-  static const _cheap = {'libusb', 'device', 'usbprint', 'usb', 'dump'};
+  static const _cheap = {'libusb', 'device', 'usbprint', 'com', 'usb', 'dump'};
   Timer? _hotplug;
 
   void startHotplug() {
