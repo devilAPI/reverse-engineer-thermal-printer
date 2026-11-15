@@ -331,7 +331,8 @@ class Win32 {
     while (off < data.length) {
       final len = (data.length - off).clamp(0, max);
       buf.asTypedList(len).setRange(0, len, data, off);
-      final n = _io(arena, h, buf, len, timeout, write: true);
+      // OVERLAPPED offsets: ignored by printers/COM ports, required for files.
+      final n = _io(arena, h, buf, len, timeout, write: true, offset: off);
       if (n < 0) throw StateError('WriteFile timed out — printer busy, offline or out of paper?');
       if (n == 0) throw StateError('WriteFile wrote nothing');
       off += n;
