@@ -12,6 +12,7 @@ Chinese ESC/POS thermal receipt printers. Targets:
 |---|---|
 | `app/` | Flutter app (Android, iOS, Linux, macOS, Windows, Web) |
 | `app/lib/core/` | Pure Dart: image pipeline (dithering), ESC/POS encoder, printer profiles |
+| `app/lib/receipt/` | Receipt editor model, JSON, rasteriser, job encoder (see `docs/RECEIPT_EDITOR.md`) |
 | `app/lib/transport/` | Byte pipes — see table below |
 | `tools/hwtest.py` | Hardware harness: detect/dump/status/test pages/raw/BLE — auto-logs to `docs/hardware/` |
 | `tools/escpos_render.py` | ESC/POS → PNG emulator to check jobs without paper |
@@ -38,6 +39,17 @@ Chinese ESC/POS thermal receipt printers. Targets:
 photo → EXIF rotate → scale to printer width → tone (brightness/contrast/gamma)
 → dither (Floyd–Steinberg / Atkinson / Bayer / threshold) → 1-bit pack
 → `ESC @`, `GS v 0` bands, feed/cut → chunked write to the transport.
+
+## Receipt editor
+
+The **Receipt** tab builds receipts, notes and labels from blocks — text
+(fonts, sizes, bold/underline/inverted), item/price columns with dot leaders,
+separators, dithered images, QR codes, barcodes (Code 128, EAN-13…), feeds and
+cuts — with a live preview, undo/redo, `{date}`/`{time}`/`{n}` placeholders,
+built-in templates, saved receipts and JSON import/export. Receipts are
+rasterised in the app at the printer's dot width (any Unicode, no code pages)
+and printed with the same connection and settings as photos. Details:
+[docs/RECEIPT_EDITOR.md](docs/RECEIPT_EDITOR.md).
 
 ## Develop
 
