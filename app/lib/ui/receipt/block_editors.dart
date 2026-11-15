@@ -123,13 +123,18 @@ class BlockEditor extends StatelessWidget {
         const SizedBox(width: 12),
         SegmentedButton<int>(
           showSelectedIcon: false,
-          segments: const [ButtonSegment(value: 2, label: Text('2')), ButtonSegment(value: 3, label: Text('3'))],
+          segments: [
+            for (var n = 2; n <= ColumnsBlock.maxCells; n++) ButtonSegment(value: n, label: Text('$n')),
+          ],
           selected: {b.cells.length},
           onSelectionChanged: (s) {
             final n = s.first;
-            final cells = n == 2
-                ? [b.cells.first, b.cells.last]
-                : [b.cells.first, const ColumnCell(text: '', align: HAlign.center), b.cells.last];
+            // Keep first and last cell (e.g. item … price); add/remove middle ones.
+            final middle = b.cells.sublist(1, b.cells.length - 1);
+            while (middle.length < n - 2) {
+              middle.add(const ColumnCell(text: '', align: HAlign.center));
+            }
+            final cells = [b.cells.first, ...middle.take(n - 2), b.cells.last];
             onChanged(b.copyWith(cells: cells), 'count');
           },
         ),

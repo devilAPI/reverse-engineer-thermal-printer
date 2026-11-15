@@ -127,7 +127,7 @@ class ReceiptRenderer {
   }
 
   _Piece _columns(ColumnsBlock b, int w, TokenContext ctx) {
-    const gap = 8;
+    final gap = b.cells.length > 3 ? 4 : 8; // tighter gaps for wide tables
     final f = b.format;
     final sx = f.scaleX.toDouble(), sy = f.scaleY.toDouble();
     final totalFlex = b.cells.fold(0, (a, c) => a + c.flex);

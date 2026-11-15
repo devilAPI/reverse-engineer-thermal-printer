@@ -19,7 +19,7 @@ printers' code page support is unknown).
   Toggle *Actual dots* for 1 dot = 1 pixel.
 - Undo / redo (toolbar, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z); typing and slider
   drags coalesce into one step.
-- Templates: three built-in samples (shop receipt, to-do note, price label),
+- Templates: four built-in samples (shop receipt, to-do note, price label, **G1** — a boutique sales slip with placeholder logo + brand, 6-column ticket header, item, payment, VAT table and bilingual return policy),
   save to / open from a list on this device (shared_preferences), import and
   export `.json` files. The current receipt is auto-saved as a draft.
 - Placeholder tokens, expanded when rendering:
@@ -159,3 +159,13 @@ images small.
 
   The rendered jobs' QR code, Code 128 and EAN-13 were checked with a
   barcode reader (zxing-cpp).
+
+### Previewing templates without a printer
+
+```sh
+THERMAL_PHOTO_RENDER_DIR=/tmp/tpl flutter test test/receipt_test.dart   # writes <Template>_<width>.bin
+python3 tools/escpos_render.py /tmp/tpl/G1_576.bin --width 576 -o /tmp/g1.png
+```
+
+Columns blocks take 2–6 cells (wide tables such as G1's ticket header use
+weighted `flex` and a smaller mono size so they fit 384 dots).

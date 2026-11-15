@@ -216,7 +216,10 @@ class ColumnsBlock extends ReceiptBlock {
     this.cells = const [ColumnCell(flex: 3), ColumnCell(align: HAlign.right)],
     this.format = const TextFormat(),
     this.fill = false,
-  }) : assert(cells.length >= 2 && cells.length <= 3);
+  }) : assert(cells.length >= 2 && cells.length <= maxCells);
+
+  /// Tables like a ticket header (6 fields) or a VAT line (4) need more than 3.
+  static const maxCells = 6;
 
   final List<ColumnCell> cells;
   final TextFormat format;
@@ -246,7 +249,7 @@ class ColumnsBlock extends ReceiptBlock {
       for (final c in (j['cells'] as List? ?? const []))
         if (c is Map) ColumnCell.fromJson(c.cast<String, Object?>()),
     ];
-    if (cells.length > 3) cells = cells.sublist(0, 3);
+    if (cells.length > ColumnsBlock.maxCells) cells = cells.sublist(0, ColumnsBlock.maxCells);
     while (cells.length < 2) {
       cells.add(const ColumnCell());
     }

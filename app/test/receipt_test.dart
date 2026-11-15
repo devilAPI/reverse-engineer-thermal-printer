@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -369,6 +371,20 @@ void main() {
       expect(a.segments.single.data, b.segments.single.data);
       expect(a.segments.single.data, isNot(c.segments.single.data));
     });
+
+    // THERMAL_PHOTO_RENDER_DIR=/tmp/x flutter test test/receipt_test.dart
+    // writes every template's ESC/POS job for tools/escpos_render.py.
+    test('dump template jobs when THERMAL_PHOTO_RENDER_DIR is set', () async {
+      final dir = Platform.environment['THERMAL_PHOTO_RENDER_DIR'];
+      if (dir == null) return;
+      for (final t in builtInTemplates) {
+        for (final p in [PrinterProfile.hz8360, PrinterProfile.mp583]) {
+          final r = await ReceiptRenderer().render(t.build(), width: p.dotsPerLine, now: now);
+          final name = t.name.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+          File('$dir/${name}_${p.dotsPerLine}.bin').writeAsBytesSync(buildReceiptJob([r], p));
+        }
+      }
+    }, testOn: 'vm');
 
     test('built-in templates render without warnings on both widths', () async {
       for (final t in builtInTemplates) {
