@@ -169,3 +169,54 @@ python3 tools/escpos_render.py /tmp/tpl/G1_576.bin --width 576 -o /tmp/g1.png
 
 Columns blocks take 2–6 cells (wide tables such as G1's ticket header use
 weighted `flex` and a smaller mono size so they fit 384 dots).
+
+
+## Spacing options
+
+All values are in **printer dots** (8 dots = 1 mm at 203 dpi); the editor
+shows the millimetre equivalent next to every field.
+
+| Where | Option | Effect |
+|---|---|---|
+| every block → *Spacing* | Space above / below | blank rows before/after the block |
+| every block → *Spacing* | Indent left / right | narrows the block from the page margins |
+| Receipt settings | Margin left / right | receipt-wide margins inside the printable width |
+| text & columns format | Stretch 50–200 % | free horizontal scale on top of ×1–×4 (condensed fonts like the printer's Font B) |
+| text & columns format | Letter spacing | extra dots between characters (negative = tighter) |
+| text & columns format | Line pitch | baseline-to-baseline distance, whole dots (auto = font default) |
+| columns | Column gap | dots between cells (auto 8, or 4 for > 3 cells) |
+| separator | Height, dash length, gap length | exact rule geometry for dashed/dotted styles |
+
+JSON keys (only written when not default): `spaceBefore`, `spaceAfter`,
+`indentLeft`, `indentRight` (any block); `stretch`, `letterSpacing`,
+`lineHeight` (text format); `gap` (columns); `dash`, `gap` (separator);
+`marginLeft`, `marginRight` (receipt). Old files load unchanged.
+
+## G1 calibration (1:1 to a photographed original)
+
+G1 reproduces a photographed 80 mm boutique slip. Method:
+
+1. **Scale.** Paper edges in the photo at x = 14 / 267.5 px → 253.5 px = 80 mm
+   → **2.52 dots per photo pixel** (so measurements are good to ±1 px ≈ ±2.5 dots).
+2. **Horizontal.** Dashed rules span 20…562 dots from the paper edge → content
+   **542 dots** wide → `marginRight: 34` of 576. Glyph pitch: body text 13.8
+   dots/char → DejaVu Sans Mono size 23 (advance 0.602 em); condensed text
+   9.6–10.3 dots/char at the same cap height → size 23 with stretch 0.70–0.74.
+   Column starts of the ticket header measured at 5/108/203/287/362/436 dots,
+   VAT right edges at 260/370/542.
+3. **Vertical.** Per-row ink profile of the photo → cap-top of every line, in
+   dots relative to the store-ID line (`g1Layout` targets: −64 … 1528).
+   Line pitches: store block 21, header 24, body 26, policy 22 dots;
+   paragraph gaps 34 / 75 / 38 dots.
+4. **Fit.** `G1_CALIBRATE=1 flutter test test/receipt_test.dart --plain-name 'G1 calibration'`
+   renders every line alone and reports its height and first ink row;
+   `tools/calibrate_g1.py` turns that into `g1Before` (space above each line)
+   so every line lands on its target. Residual ≤ 2 dots (ascenders/accents vs
+   cap tops — below the photo's resolution).
+5. **Check.** `tools/overlay_compare.py` overlays the render (red) on the
+   scaled photo (grey): all rules, table columns, the total line and the
+   paragraph starts coincide.
+
+Physical offset: the original starts printing 20 dots from the paper edge;
+an 80 mm printer with 576 printable dots usually starts ~32 dots in, so the
+whole slip sits ~1.5 mm further right — sizes and distances stay 1:1.

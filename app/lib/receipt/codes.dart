@@ -108,7 +108,8 @@ int alignOffset(HAlign a, int total, int w) => switch (a) {
     };
 
 /// Draw a separator line of [style] across [m] at rows y..y+thickness.
-void drawSeparator(MonoBitmap m, SeparatorStyle style, int y, int thickness) {
+/// [dash]/[gap] override the automatic dash (or dot) length and spacing.
+void drawSeparator(MonoBitmap m, SeparatorStyle style, int y, int thickness, {int? dash, int? gap}) {
   final w = m.width;
   switch (style) {
     case SeparatorStyle.blank:
@@ -119,14 +120,14 @@ void drawSeparator(MonoBitmap m, SeparatorStyle style, int y, int thickness) {
       fillRect(m, 0, y, w, thickness);
       fillRect(m, 0, y + thickness * 2, w, thickness);
     case SeparatorStyle.dashed:
-      final dash = 6 + thickness * 3, gap = 4 + thickness * 2;
-      for (var x = 0; x < w; x += dash + gap) {
-        fillRect(m, x, y, dash, thickness);
+      final d = dash ?? 6 + thickness * 3, g = gap ?? 4 + thickness * 2;
+      for (var x = 0; x < w; x += d + g) {
+        fillRect(m, x, y, d, thickness);
       }
     case SeparatorStyle.dotted:
-      final step = thickness * 3 + 1;
-      for (var x = 0; x < w; x += step) {
-        fillRect(m, x, y, thickness, thickness);
+      final d = dash ?? thickness, g = gap ?? thickness * 2 + 1;
+      for (var x = 0; x < w; x += d + g) {
+        fillRect(m, x, y, d, thickness);
       }
   }
 }

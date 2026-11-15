@@ -36,12 +36,16 @@ class ReceiptRenderer {
     final ctx = TokenContext(now: now ?? DateTime.now(), number: number ?? r.counter);
     final warnings = <String>[];
     final segments = <List<_Piece>>[[]];
+    final content = math.max(16, width - r.marginLeft - r.marginRight);
     for (final b in r.blocks) {
       if (b is CutBlock) {
         segments.add([]);
         continue;
       }
-      segments.last.add(await _layout(b, width, ctx, warnings));
+      final sp = b.spacing;
+      final inner = math.max(8, content - sp.left - sp.right);
+      final piece = await _layout(b, inner, ctx, warnings);
+      segments.last.add(_place(piece, r.marginLeft + sp.left, inner, sp.before, sp.after));
     }
     final bitmaps = <MonoBitmap>[];
     for (final seg in segments) {
@@ -53,6 +57,40 @@ class ReceiptRenderer {
       segments: bitmaps,
       endsWithCut: r.blocks.isNotEmpty && r.blocks.last is CutBlock,
       warnings: warnings,
+    );
+  }
+
+  /// Position a piece laid out at [inner] width: shift it right by [x0] and
+  /// add [before]/[after] blank rows. Bitmap content is OR-ed (black only) so
+  /// it never erases vector text drawn in the same rows (barcode labels).
+  static _Piece _place(_Piece p, int x0, int inner, int before, int after) {
+    if (x0 == 0 && before == 0 && after == 0) return p;
+    final paint = p.paint, blit = p.blit;
+    return _Piece(
+      p.height + before + after,
+      paint: paint == null
+          ? null
+          : (c, y) {
+              c
+                ..save()
+                ..translate(x0.toDouble(), 0);
+              paint(c, y + before);
+              c.restore();
+            },
+      blit: blit == null || p.height == 0
+          ? null
+          : (m, y) {
+              final tmp = MonoBitmap(inner, p.height);
+              blit(tmp, 0);
+              for (var ty = 0; ty < tmp.height; ty++) {
+                for (var tx = 0; tx < tmp.width; tx++) {
+                  if (tmp.getPixel(tx, ty)) {
+                    final dx = x0 + tx, dy = y + before + ty;
+                    if (dx < m.width && dy < m.height) m.setPixel(dx, dy, true);
+                  }
+                }
+              }
+            },
     );
   }
 
@@ -68,7 +106,7 @@ class ReceiptRenderer {
         final ink = separatorInk(b.style, b.thickness);
         final h = math.max(b.height, ink);
         final y0 = (h - ink) ~/ 2;
-        return _Piece(h, blit: (m, y) => drawSeparator(m, b.style, y + y0, b.thickness));
+        return _Piece(h, blit: (m, y) => drawSeparator(m, b.style, y + y0, b.thickness, dash: b.dash, gap: b.gap));
       case FeedBlock():
         return _Piece((b.mm * 8).round());
       case CutBlock():
@@ -85,9 +123,21 @@ class ReceiptRenderer {
   static const _black = ui.Color(0xFF000000);
   static const _white = ui.Color(0xFFFFFFFF);
 
+  /// Horizontal factor applied when drawing: integer scale × free stretch.
+  static double _sx(TextFormat f) => f.scaleX * f.stretch;
+
   static ui.Paragraph _paragraph(String text, TextFormat f, HAlign align, double maxWidth, {ui.Color color = _black}) {
     final weight = f.bold ? ui.FontWeight.w700 : ui.FontWeight.w400;
+    // Spacing options are given in final printer dots; the paragraph is laid
+    // out before scaling, so convert into paragraph units.
+    // Whole dots: paper has no half rows, and Flutter would round per line anyway.
+    final lh = f.lineHeight?.roundToDouble();
+    final height = lh == null ? null : (lh / f.scaleY) / f.size;
     final pb = ui.ParagraphBuilder(ui.ParagraphStyle(
+      strutStyle: height == null
+          ? null
+          : ui.StrutStyle(fontFamily: f.font.family, fontSize: f.size, height: height, forceStrutHeight: true),
+      height: height,
       textAlign: switch (align) {
         HAlign.left => ui.TextAlign.left,
         HAlign.center => ui.TextAlign.center,
@@ -105,6 +155,8 @@ class ReceiptRenderer {
         decoration: f.underline ? ui.TextDecoration.underline : ui.TextDecoration.none,
         decorationColor: color,
         decorationThickness: 1.5,
+        letterSpacing: f.letterSpacing == 0 ? null : f.letterSpacing / _sx(f),
+        height: height,
       ))
       ..addText(text);
     return pb.build()..layout(ui.ParagraphConstraints(width: math.max(1, maxWidth)));
@@ -112,7 +164,7 @@ class ReceiptRenderer {
 
   _Piece _text(String text, TextFormat f, HAlign align, bool invert, int w) {
     final pad = invert ? 6 : 0;
-    final sx = f.scaleX.toDouble(), sy = f.scaleY.toDouble();
+    final sx = _sx(f), sy = f.scaleY.toDouble();
     final p = _paragraph(text, f, align, (w - 2 * pad) / sx, color: invert ? _white : _black);
     final h = (p.height * sy).ceil() + 2 * pad;
     return _Piece(h, paint: (c, y) {
@@ -127,9 +179,9 @@ class ReceiptRenderer {
   }
 
   _Piece _columns(ColumnsBlock b, int w, TokenContext ctx) {
-    final gap = b.cells.length > 3 ? 4 : 8; // tighter gaps for wide tables
+    final gap = b.gap ?? (b.cells.length > 3 ? 4 : 8); // tighter gaps for wide tables
     final f = b.format;
-    final sx = f.scaleX.toDouble(), sy = f.scaleY.toDouble();
+    final sx = _sx(f), sy = f.scaleY.toDouble();
     final totalFlex = b.cells.fold(0, (a, c) => a + c.flex);
     final avail = w - gap * (b.cells.length - 1);
     final xs = <double>[], ws = <double>[], ps = <ui.Paragraph>[];

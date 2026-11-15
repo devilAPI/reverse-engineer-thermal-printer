@@ -56,35 +56,54 @@ Uint8List testPng() {
   return img.encodePng(im);
 }
 
-Receipt everyBlock() => Receipt(name: 'All blocks', counter: 42, blocks: [
-      TextBlock(
-        text: 'Hello\nWörld {date}',
-        align: HAlign.center,
+Receipt everyBlock() => Receipt(
+  name: 'All blocks',
+  counter: 42,
+  blocks: [
+    TextBlock(
+      text: 'Hello\nWörld {date}',
+      align: HAlign.center,
+      invert: true,
+      format: const TextFormat(font: ReceiptFont.mono, size: 30, bold: true, underline: true, scaleX: 2, scaleY: 3),
+    ),
+    ColumnsBlock(
+      cells: const [
+        ColumnCell(text: '2x', flex: 1),
+        ColumnCell(text: 'Tea', flex: 4, align: HAlign.center),
+        ColumnCell(text: '4.00', flex: 2, align: HAlign.right),
+      ],
+      fill: true,
+      format: const TextFormat(size: 20),
+    ),
+    SeparatorBlock(style: SeparatorStyle.double, thickness: 3, height: 30),
+    ImageBlock(
+      bytes: testPng(),
+      name: 'logo.png',
+      widthPercent: 50,
+      align: HAlign.right,
+      settings: const PrintSettings(
+        dither: DitherMode.ordered,
+        brightness: 0.1,
+        contrast: 1.2,
+        gamma: 1.5,
+        threshold: 100,
         invert: true,
-        format: const TextFormat(font: ReceiptFont.mono, size: 30, bold: true, underline: true, scaleX: 2, scaleY: 3),
+        rotate90: true,
       ),
-      ColumnsBlock(
-        cells: const [
-          ColumnCell(text: '2x', flex: 1),
-          ColumnCell(text: 'Tea', flex: 4, align: HAlign.center),
-          ColumnCell(text: '4.00', flex: 2, align: HAlign.right),
-        ],
-        fill: true,
-        format: const TextFormat(size: 20),
-      ),
-      SeparatorBlock(style: SeparatorStyle.double, thickness: 3, height: 30),
-      ImageBlock(
-        bytes: testPng(),
-        name: 'logo.png',
-        widthPercent: 50,
-        align: HAlign.right,
-        settings: const PrintSettings(dither: DitherMode.ordered, brightness: 0.1, contrast: 1.2, gamma: 1.5, threshold: 100, invert: true, rotate90: true),
-      ),
-      QrBlock(data: 'https://example.com/{n}', moduleSize: 4, ecc: QrEcc.high, align: HAlign.left),
-      BarcodeBlock(symbology: BarcodeSymbology.ean13, data: '400638133393', moduleWidth: 3, height: 50, showText: false, align: HAlign.right),
-      FeedBlock(mm: 7.5),
-      CutBlock(),
-    ]);
+    ),
+    QrBlock(data: 'https://example.com/{n}', moduleSize: 4, ecc: QrEcc.high, align: HAlign.left),
+    BarcodeBlock(
+      symbology: BarcodeSymbology.ean13,
+      data: '400638133393',
+      moduleWidth: 3,
+      height: 50,
+      showText: false,
+      align: HAlign.right,
+    ),
+    FeedBlock(mm: 7.5),
+    CutBlock(),
+  ],
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -108,6 +127,42 @@ void main() {
       expect(r.toJson()['format'], receiptFormatTag);
     });
 
+    test('spacing options round-trip and default to nothing in JSON', () {
+      final doc = Receipt(
+        marginLeft: 12,
+        marginRight: 36,
+        blocks: [
+          TextBlock(
+            text: 'x',
+            format: const TextFormat(stretch: 0.8, letterSpacing: -1, lineHeight: 21.5),
+            spacing: const BlockSpacing(before: 3, after: 4, left: 5, right: 6),
+          ),
+          ColumnsBlock(gap: 2),
+          SeparatorBlock(dash: 6, gap: 4),
+          TextBlock(text: 'plain'),
+        ],
+      );
+      final back = Receipt.decode(doc.encode());
+      expect(back.marginLeft, 12);
+      expect(back.marginRight, 36);
+      final t = back.blocks[0] as TextBlock;
+      expect(t.format, doc.blocks[0] is TextBlock ? (doc.blocks[0] as TextBlock).format : null);
+      expect(t.spacing, const BlockSpacing(before: 3, after: 4, left: 5, right: 6));
+      expect((back.blocks[1] as ColumnsBlock).gap, 2);
+      expect((back.blocks[2] as SeparatorBlock).dash, 6);
+      expect((back.blocks[2] as SeparatorBlock).gap, 4);
+      final plain = back.blocks[3].toJson();
+      expect(plain.keys, isNot(contains('spaceBefore')));
+      expect(plain.keys, isNot(contains('lineHeight')));
+      // withSpacing keeps the id and content
+      final b = back.blocks[0];
+      final moved = b.withSpacing(const BlockSpacing(before: 99));
+      expect(moved.id, b.id);
+      expect(moved.spacing.before, 99);
+      expect(moved.spacing.left, 0);
+      expect((moved as TextBlock).format, t.format);
+    });
+
     test('templates round-trip', () {
       for (final t in builtInTemplates) {
         final r = t.build();
@@ -116,11 +171,13 @@ void main() {
     });
 
     test('tolerant reading: defaults, clamping, unknown blocks skipped', () {
-      final r = Receipt.decode('{"version": 99, "blocks": ['
-          '{"type": "text", "text": "x", "size": 9999, "scaleX": 9},'
-          '{"type": "hologram"},'
-          '{"type": "columns", "cells": [{"text": "only one"}]},'
-          '{"type": "cut"}]}');
+      final r = Receipt.decode(
+        '{"version": 99, "blocks": ['
+        '{"type": "text", "text": "x", "size": 9999, "scaleX": 9},'
+        '{"type": "hologram"},'
+        '{"type": "columns", "cells": [{"text": "only one"}]},'
+        '{"type": "cut"}]}',
+      );
       expect(r.blocks.map((b) => b.type), ['text', 'columns', 'cut']);
       final t = r.blocks[0] as TextBlock;
       expect(t.format.size, 400);
@@ -183,7 +240,14 @@ void main() {
 
   group('editor', () {
     test('add/duplicate/move/remove with undo & redo', () {
-      final e = ReceiptEditor(Receipt(blocks: [TextBlock(text: 'a'), TextBlock(text: 'b')]));
+      final e = ReceiptEditor(
+        Receipt(
+          blocks: [
+            TextBlock(text: 'a'),
+            TextBlock(text: 'b'),
+          ],
+        ),
+      );
       String texts() => e.doc.blocks.map((b) => b is TextBlock ? b.text : b.type).join(',');
       e.select(e.doc.blocks[0].id);
       e.add(CutBlock());
@@ -242,11 +306,19 @@ void main() {
 
     test('final cut follows job options unless the receipt ends with a cut', () {
       final opts = const JobOptions(cut: false);
-      final plain = buildReceiptJob([RenderedReceipt(width: 576, segments: [seg(576, 4)])], PrinterProfile.hz8360, opts);
+      final plain = buildReceiptJob(
+        [
+          RenderedReceipt(width: 576, segments: [seg(576, 4)]),
+        ],
+        PrinterProfile.hz8360,
+        opts,
+      );
       expect(countOf(plain, [0x1D, 0x56, 0x42]), 0);
       expect(plain.sublist(plain.length - 3), [0x1B, 0x64, 4]);
       final cut = buildReceiptJob(
-        [RenderedReceipt(width: 576, segments: [seg(576, 4)], endsWithCut: true)],
+        [
+          RenderedReceipt(width: 576, segments: [seg(576, 4)], endsWithCut: true),
+        ],
         PrinterProfile.hz8360,
         opts,
       );
@@ -269,14 +341,16 @@ void main() {
     final now = DateTime(2026, 11, 15, 12, 0);
 
     test('renders at the profile width, cut splits into segments', () async {
-      final doc = Receipt(blocks: [
-        CutBlock(), // leading cut: no empty slip
-        TextBlock(text: 'First'),
-        CutBlock(),
-        CutBlock(), // repeated cut collapses
-        TextBlock(text: 'Second', format: const TextFormat(size: 40, bold: true)),
-        CutBlock(),
-      ]);
+      final doc = Receipt(
+        blocks: [
+          CutBlock(), // leading cut: no empty slip
+          TextBlock(text: 'First'),
+          CutBlock(),
+          CutBlock(), // repeated cut collapses
+          TextBlock(text: 'Second', format: const TextFormat(size: 40, bold: true)),
+          CutBlock(),
+        ],
+      );
       for (final w in [384, 576]) {
         final r = await ReceiptRenderer().render(doc, width: w, now: now);
         expect(r.segments, hasLength(2));
@@ -290,7 +364,12 @@ void main() {
 
     test('feed and separator heights are exact', () async {
       final r = await ReceiptRenderer().render(
-        Receipt(blocks: [FeedBlock(mm: 10), SeparatorBlock(style: SeparatorStyle.solid, thickness: 4, height: 20)]),
+        Receipt(
+          blocks: [
+            FeedBlock(mm: 10),
+            SeparatorBlock(style: SeparatorStyle.solid, thickness: 4, height: 20),
+          ],
+        ),
         width: 384,
       );
       final m = r.segments.single;
@@ -300,12 +379,78 @@ void main() {
       expect(m.getPixel(0, 88) && m.getPixel(383, 91), isTrue);
     });
 
+    test('spacing: before/after rows, indents and receipt margins are exact', () async {
+      final r = await ReceiptRenderer().render(
+        Receipt(
+          marginLeft: 20,
+          marginRight: 30,
+          blocks: [
+            SeparatorBlock(
+              style: SeparatorStyle.solid,
+              thickness: 2,
+              height: 2,
+              spacing: const BlockSpacing(before: 10, after: 6, left: 5, right: 7),
+            ),
+          ],
+        ),
+        width: 576,
+      );
+      final m = r.segments.single;
+      expect(m.height, 10 + 2 + 6);
+      expect(blackIn(m, 0, 0, null, 10), 0, reason: 'space before is blank');
+      expect(blackIn(m, 0, 12), 0, reason: 'space after is blank');
+      // line spans x = margin 20 + indent 5 .. 576 - 30 - 7
+      expect(m.getPixel(24, 10), isFalse);
+      expect(m.getPixel(25, 10), isTrue);
+      expect(m.getPixel(538, 11), isTrue);
+      expect(m.getPixel(539, 10), isFalse);
+      expect(blackIn(m), (539 - 25) * 2);
+    });
+
+    test('separator dash/gap pattern is exact', () async {
+      final r = await ReceiptRenderer().render(
+        Receipt(blocks: [SeparatorBlock(style: SeparatorStyle.dashed, thickness: 1, height: 1, dash: 5, gap: 3)]),
+        width: 64,
+      );
+      final row = [for (var x = 0; x < 16; x++) r.segments.single.getPixel(x, 0) ? 1 : 0];
+      expect(row, [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0]);
+    });
+
+    test('line pitch, stretch and letter spacing change the layout', () async {
+      Future<MonoBitmap> one(TextFormat f, [String t = 'A\nA\nA']) async => (await ReceiptRenderer().render(
+        Receipt(
+          blocks: [TextBlock(text: t, format: f)],
+        ),
+        width: 576,
+      )).segments.single;
+      const base = TextFormat(font: ReceiptFont.mono, size: 20);
+      expect((await one(base.copyWith(lineHeight: 30))).height, 90, reason: '3 lines x 30 dots');
+      expect((await one(base.copyWith(lineHeight: 21.5))).height, 66, reason: 'pitch rounds to whole dots (22)');
+      int inkWidth(MonoBitmap m) {
+        var maxX = 0;
+        for (var y = 0; y < m.height; y++) {
+          for (var x = 0; x < m.width; x++) {
+            if (m.getPixel(x, y) && x > maxX) maxX = x;
+          }
+        }
+        return maxX;
+      }
+
+      final normal = inkWidth(await one(base, 'MMMMMMMMMM'));
+      final narrow = inkWidth(await one(base.copyWith(stretch: 0.75), 'MMMMMMMMMM'));
+      final spaced = inkWidth(await one(base.copyWith(letterSpacing: 4), 'MMMMMMMMMM'));
+      expect(narrow, closeTo(normal * 0.75, 4));
+      expect(spaced, closeTo(normal + 9 * 4, 3));
+    });
+
     test('alignment and inverted text', () async {
       final r = await ReceiptRenderer().render(
-        Receipt(blocks: [
-          TextBlock(text: 'R', align: HAlign.right),
-          TextBlock(text: 'INV', invert: true),
-        ]),
+        Receipt(
+          blocks: [
+            TextBlock(text: 'R', align: HAlign.right),
+            TextBlock(text: 'INV', invert: true),
+          ],
+        ),
         width: 576,
       );
       final m = r.segments.single;
@@ -320,7 +465,9 @@ void main() {
 
     test('QR code is drawn on whole dots with finder patterns', () async {
       final r = await ReceiptRenderer().render(
-        Receipt(blocks: [QrBlock(data: 'hello', moduleSize: 4, align: HAlign.left)]),
+        Receipt(
+          blocks: [QrBlock(data: 'hello', moduleSize: 4, align: HAlign.left)],
+        ),
         width: 384,
       );
       final m = r.segments.single;
@@ -335,17 +482,26 @@ void main() {
 
     test('barcode bars use the module width; invalid data becomes a warning', () async {
       final r = await ReceiptRenderer().render(
-        Receipt(blocks: [BarcodeBlock(symbology: BarcodeSymbology.ean13, data: '400638133393', moduleWidth: 2, showText: false)]),
+        Receipt(
+          blocks: [
+            BarcodeBlock(symbology: BarcodeSymbology.ean13, data: '400638133393', moduleWidth: 2, showText: false),
+          ],
+        ),
         width: 576,
       );
       final m = r.segments.single;
       final row = m.height ~/ 2;
-      final xs = [for (var x = 0; x < 576; x++) if (m.getPixel(x, row)) x];
+      final xs = [
+        for (var x = 0; x < 576; x++)
+          if (m.getPixel(x, row)) x,
+      ];
       expect(xs.last - xs.first + 1, 95 * 2);
       expect(xs.first, (576 - 190) ~/ 2);
 
       final bad = await ReceiptRenderer().render(
-        Receipt(blocks: [BarcodeBlock(symbology: BarcodeSymbology.ean13, data: 'nope')]),
+        Receipt(
+          blocks: [BarcodeBlock(symbology: BarcodeSymbology.ean13, data: 'nope')],
+        ),
         width: 576,
       );
       expect(bad.warnings.single, startsWith('EAN-13'));
@@ -354,7 +510,9 @@ void main() {
 
     test('image block is dithered at the requested width and aligned', () async {
       final r = await ReceiptRenderer().render(
-        Receipt(blocks: [ImageBlock(bytes: testPng(), widthPercent: 50, align: HAlign.right)]),
+        Receipt(
+          blocks: [ImageBlock(bytes: testPng(), widthPercent: 50, align: HAlign.right)],
+        ),
         width: 576,
       );
       final m = r.segments.single;
@@ -384,6 +542,36 @@ void main() {
           File('$dir/${name}_${p.dotsPerLine}.bin').writeAsBytesSync(buildReceiptJob([r], p));
         }
       }
+    }, testOn: 'vm');
+
+    // G1_CALIBRATE=1 flutter test test/receipt_test.dart --plain-name 'G1 calibration'
+    // prints, per g1Layout line rendered alone: height and first ink row.
+    // tools/calibrate_g1.py turns that into the g1Before table.
+    test('G1 calibration metrics', () async {
+      if (Platform.environment['G1_CALIBRATE'] == null) return;
+      final rows = <String>[];
+      for (final e in g1Layout) {
+        // 20 dots of headroom: tight line pitches draw caps above the block top.
+        final b = e.build(BlockSpacing(before: 20, left: e.left, right: e.right));
+        final r = await ReceiptRenderer().render(Receipt(marginRight: 34, blocks: [b]), width: 576);
+        final m = r.segments.single;
+        var top = -1;
+        for (var y = 0; y < m.height && top < 0; y++) {
+          for (var x = 0; x < m.width; x++) {
+            if (m.getPixel(x, y)) {
+              top = y;
+              break;
+            }
+          }
+        }
+        rows.add('${e.target} ${m.height - 20} ${top - 20}');
+      }
+      final head = await ReceiptRenderer().render(
+        Receipt(marginRight: 34, blocks: g1Receipt().blocks.take(2).toList()),
+        width: 576,
+      );
+      // ignore: avoid_print
+      print('G1CAL head ${head.segments.single.height}\nG1CAL ${rows.join('\nG1CAL ')}');
     }, testOn: 'vm');
 
     test('built-in templates render without warnings on both widths', () async {

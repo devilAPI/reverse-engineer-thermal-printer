@@ -167,7 +167,8 @@ class _ReceiptPageState extends State<ReceiptPage> {
     _printer.setStatus('Rendering receipt…');
     final now = DateTime.now();
     final renders = <RenderedReceipt>[
-      for (var i = 0; i < copies; i++) await _renderer.render(doc, width: p.dotsPerLine, now: now, number: doc.counter + i),
+      for (var i = 0; i < copies; i++)
+        await _renderer.render(doc, width: p.dotsPerLine, now: now, number: doc.counter + i),
     ];
     final job = buildReceiptJob(renders, p, _printer.job);
     final ok = await _printer.send(job, 'receipt');
@@ -197,7 +198,8 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 onTap: () => Navigator.pop(context, t.build()),
               ),
             const _DialogHeader('Saved on this device'),
-            if (_library.isEmpty) const ListTile(enabled: false, title: Text('Nothing saved yet — use the save button.')),
+            if (_library.isEmpty)
+              const ListTile(enabled: false, title: Text('Nothing saved yet — use the save button.')),
             for (final r in _library)
               ListTile(
                 leading: const Icon(Icons.receipt_outlined),
@@ -282,36 +284,78 @@ class _ReceiptPageState extends State<ReceiptPage> {
           child: Text('Receipt · ${doc.name}', overflow: TextOverflow.ellipsis),
         ),
         actions: [
-          IconButton(onPressed: _editor.canUndo ? _editor.undo : null, icon: const Icon(Icons.undo), tooltip: 'Undo (Ctrl+Z)'),
-          IconButton(onPressed: _editor.canRedo ? _editor.redo : null, icon: const Icon(Icons.redo), tooltip: 'Redo (Ctrl+Y)'),
-          IconButton(onPressed: _openDialog, icon: const Icon(Icons.folder_open_outlined), tooltip: 'Templates & saved receipts'),
+          IconButton(
+            onPressed: _editor.canUndo ? _editor.undo : null,
+            icon: const Icon(Icons.undo),
+            tooltip: 'Undo (Ctrl+Z)',
+          ),
+          IconButton(
+            onPressed: _editor.canRedo ? _editor.redo : null,
+            icon: const Icon(Icons.redo),
+            tooltip: 'Redo (Ctrl+Y)',
+          ),
+          IconButton(
+            onPressed: _openDialog,
+            icon: const Icon(Icons.folder_open_outlined),
+            tooltip: 'Templates & saved receipts',
+          ),
           IconButton(onPressed: _saveToLibrary, icon: const Icon(Icons.save_outlined), tooltip: 'Save on this device'),
           PopupMenuButton<String>(
             tooltip: 'More',
             onSelected: (v) => switch (v) {
-              'new' => _editor.load(Receipt(name: 'Untitled', blocks: [TextBlock(text: 'Hello!')])),
+              'new' => _editor.load(
+                Receipt(
+                  name: 'Untitled',
+                  blocks: [TextBlock(text: 'Hello!')],
+                ),
+              ),
               'rename' => _rename(),
               'import' => _import(),
               'export' => _export(),
               _ => null,
             },
             itemBuilder: (context) => const [
-              PopupMenuItem(value: 'new', child: ListTile(leading: Icon(Icons.note_add_outlined), title: Text('New receipt'))),
-              PopupMenuItem(value: 'rename', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Rename…'))),
-              PopupMenuItem(value: 'import', child: ListTile(leading: Icon(Icons.file_open_outlined), title: Text('Import JSON…'))),
-              PopupMenuItem(value: 'export', child: ListTile(leading: Icon(Icons.save_alt), title: Text('Export JSON…'))),
+              PopupMenuItem(
+                value: 'new',
+                child: ListTile(leading: Icon(Icons.note_add_outlined), title: Text('New receipt')),
+              ),
+              PopupMenuItem(
+                value: 'rename',
+                child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Rename…')),
+              ),
+              PopupMenuItem(
+                value: 'import',
+                child: ListTile(leading: Icon(Icons.file_open_outlined), title: Text('Import JSON…')),
+              ),
+              PopupMenuItem(
+                value: 'export',
+                child: ListTile(leading: Icon(Icons.save_alt), title: Text('Export JSON…')),
+              ),
             ],
           ),
         ],
-        bottom: wide ? null : const TabBar(tabs: [Tab(text: 'Edit'), Tab(text: 'Preview')]),
+        bottom: wide
+            ? null
+            : const TabBar(
+                tabs: [
+                  Tab(text: 'Edit'),
+                  Tab(text: 'Preview'),
+                ],
+              ),
       ),
       body: wide
-          ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SizedBox(width: 480, child: _buildEditPane(context)),
-              const VerticalDivider(width: 1),
-              Expanded(child: _buildPreview(context)),
-            ])
-          : TabBarView(physics: const NeverScrollableScrollPhysics(), children: [_buildEditPane(context), _buildPreview(context)]),
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 480, child: _buildEditPane(context)),
+                const VerticalDivider(width: 1),
+                Expanded(child: _buildPreview(context)),
+              ],
+            )
+          : TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
+              children: [_buildEditPane(context), _buildPreview(context)],
+            ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'print-receipt',
         onPressed: !_printer.canPrint || doc.blocks.isEmpty ? null : _print,
@@ -335,80 +379,111 @@ class _ReceiptPageState extends State<ReceiptPage> {
     final doc = _editor.doc;
     final blocks = doc.blocks;
     final t = Theme.of(context);
-    return CustomScrollView(controller: _scroll, slivers: [
-      SliverToBoxAdapter(
-        child: ExpansionTile(
-          leading: const Icon(Icons.print_outlined),
-          title: const Text('Printer'),
-          subtitle: Text(
-            '${_printer.profile.name} · ${_printer.endpoint?.label ?? 'no connection'}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          children: [PrinterPanel(controller: _printer), OutputPanel(controller: _printer)],
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: ExpansionTile(
-          leading: const Icon(Icons.tune),
-          title: const Text('Receipt settings'),
-          subtitle: Text('Next number {n} = ${doc.counter}'),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          children: [
-            SyncedTextField(label: 'Name', value: doc.name, onChanged: (v) => _editor.rename(v)),
-            SyncedTextField(
-              label: 'Next number for {n}',
-              helper: 'Advances by one per printed copy.',
-              value: '${doc.counter}',
-              onChanged: (v) {
-                final n = int.tryParse(v.trim());
-                if (n != null) _editor.setCounter(n);
-              },
+    return CustomScrollView(
+      controller: _scroll,
+      slivers: [
+        SliverToBoxAdapter(
+          child: ExpansionTile(
+            leading: const Icon(Icons.print_outlined),
+            title: const Text('Printer'),
+            subtitle: Text(
+              '${_printer.profile.name} · ${_printer.endpoint?.label ?? 'no connection'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            children: [
+              PrinterPanel(controller: _printer),
+              OutputPanel(controller: _printer),
+            ],
+          ),
         ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
-          child: Row(children: [
-            Text('Blocks (${blocks.length})', style: t.textTheme.titleSmall),
-            const Spacer(),
-            MenuAnchor(
-              builder: (context, ctl, _) => FilledButton.tonalIcon(
-                key: const Key('add-block'),
-                onPressed: () => ctl.isOpen ? ctl.close() : ctl.open(),
-                icon: const Icon(Icons.add),
-                label: const Text('Add block'),
+        SliverToBoxAdapter(
+          child: ExpansionTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('Receipt settings'),
+            subtitle: Text(
+              'Next number {n} = ${doc.counter}'
+              '${doc.marginLeft + doc.marginRight > 0 ? ' · margins ${doc.marginLeft}/${doc.marginRight} dots' : ''}',
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            children: [
+              SyncedTextField(label: 'Name', value: doc.name, onChanged: (v) => _editor.rename(v)),
+              SyncedTextField(
+                label: 'Next number for {n}',
+                helper: 'Advances by one per printed copy.',
+                value: '${doc.counter}',
+                onChanged: (v) {
+                  final n = int.tryParse(v.trim());
+                  if (n != null) _editor.setCounter(n);
+                },
               ),
-              menuChildren: [
-                for (final (id, icon, label, make) in blockFactories)
-                  MenuItemButton(
-                    key: Key('add-$id'),
-                    leadingIcon: Icon(icon),
-                    onPressed: () => _add(make()),
-                    child: Text(label),
+              const SizedBox(height: 8),
+              Text(
+                'Page margins (inside the printable ${_printer.profile.dotsPerLine} dots)',
+                style: t.textTheme.labelMedium,
+              ),
+              DotsField(
+                label: 'Margin left',
+                value: doc.marginLeft,
+                min: 0,
+                max: 400,
+                onChanged: (v) => _editor.apply(doc.copyWith(marginLeft: v), coalesce: 'marginLeft'),
+              ),
+              DotsField(
+                label: 'Margin right',
+                value: doc.marginRight,
+                min: 0,
+                max: 400,
+                onChanged: (v) => _editor.apply(doc.copyWith(marginRight: v), coalesce: 'marginRight'),
+              ),
+            ],
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
+            child: Row(
+              children: [
+                Text('Blocks (${blocks.length})', style: t.textTheme.titleSmall),
+                const Spacer(),
+                MenuAnchor(
+                  builder: (context, ctl, _) => FilledButton.tonalIcon(
+                    key: const Key('add-block'),
+                    onPressed: () => ctl.isOpen ? ctl.close() : ctl.open(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add block'),
                   ),
+                  menuChildren: [
+                    for (final (id, icon, label, make) in blockFactories)
+                      MenuItemButton(
+                        key: Key('add-$id'),
+                        leadingIcon: Icon(icon),
+                        onPressed: () => _add(make()),
+                        child: Text(label),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ]),
+          ),
         ),
-      ),
-      if (blocks.isEmpty)
-        const SliverToBoxAdapter(
-          child: Padding(padding: EdgeInsets.all(24), child: Text('No blocks yet. Add one, or open a template.')),
+        if (blocks.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(padding: EdgeInsets.all(24), child: Text('No blocks yet. Add one, or open a template.')),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 96),
+          sliver: SliverReorderableList(
+            itemCount: blocks.length,
+            onReorder: _editor.move,
+            proxyDecorator: (child, _, _) =>
+                Material(elevation: 6, borderRadius: BorderRadius.circular(12), child: child),
+            itemBuilder: (context, i) => _blockTile(context, blocks[i], i),
+          ),
         ),
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 96),
-        sliver: SliverReorderableList(
-          itemCount: blocks.length,
-          onReorder: _editor.move,
-          proxyDecorator: (child, _, _) => Material(elevation: 6, borderRadius: BorderRadius.circular(12), child: child),
-          itemBuilder: (context, i) => _blockTile(context, blocks[i], i),
-        ),
-      ),
-    ]);
+      ],
+    );
   }
 
   Widget _blockTile(BuildContext context, ReceiptBlock b, int index) {
@@ -420,48 +495,57 @@ class _ReceiptPageState extends State<ReceiptPage> {
       margin: const EdgeInsets.symmetric(vertical: 3),
       color: selected ? cs.surfaceContainerHighest : null,
       shape: selected
-          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: cs.primary, width: 1.5))
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: cs.primary, width: 1.5),
+            )
           : null,
       clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.only(left: 4, right: 4),
-          leading: ReorderableDragStartListener(
-            index: index,
-            child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.drag_indicator)),
-          ),
-          title: Row(children: [Icon(icon, size: 18), const SizedBox(width: 6), Text(label)]),
-          subtitle: Text(blockSummary(b), maxLines: 1, overflow: TextOverflow.ellipsis),
-          onTap: () => _editor.select(selected ? null : b.id),
-          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(
-              icon: const Icon(Icons.copy_outlined, size: 20),
-              tooltip: 'Duplicate',
-              onPressed: () {
-                _editor.duplicate(b.id);
-                _revealSelected();
-              },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.only(left: 4, right: 4),
+            leading: ReorderableDragStartListener(
+              index: index,
+              child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.drag_indicator)),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 20),
-              tooltip: 'Delete',
-              onPressed: () => _editor.remove(b.id),
-            ),
-          ]),
-        ),
-        if (selected)
-          Padding(
-            key: _selectedKey,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: BlockEditor(
-              key: ValueKey('editor-${b.id}'),
-              block: b,
-              hasCutter: _printer.profile.hasCutter,
-              onChanged: _editor.update,
+            title: Row(children: [Icon(icon, size: 18), const SizedBox(width: 6), Text(label)]),
+            subtitle: Text(blockSummary(b), maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () => _editor.select(selected ? null : b.id),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.copy_outlined, size: 20),
+                  tooltip: 'Duplicate',
+                  onPressed: () {
+                    _editor.duplicate(b.id);
+                    _revealSelected();
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  tooltip: 'Delete',
+                  onPressed: () => _editor.remove(b.id),
+                ),
+              ],
             ),
           ),
-      ]),
+          if (selected)
+            Padding(
+              key: _selectedKey,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: BlockEditor(
+                key: ValueKey('editor-${b.id}'),
+                block: b,
+                hasCutter: _printer.profile.hasCutter,
+                onChanged: _editor.update,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -474,58 +558,62 @@ class _ReceiptPageState extends State<ReceiptPage> {
     final endCut = profile.hasCutter && (r?.endsWithCut == true || _printer.job.cut);
 
     Widget paper(ui.Image img) => Container(
-          decoration: const BoxDecoration(boxShadow: [BoxShadow(blurRadius: 6, color: Colors.black26)]),
-          child: RawImage(
-            image: img,
-            width: displayWidth,
-            filterQuality: _actualSize ? FilterQuality.none : FilterQuality.medium,
-          ),
-        );
+      decoration: const BoxDecoration(boxShadow: [BoxShadow(blurRadius: 6, color: Colors.black26)]),
+      child: RawImage(
+        image: img,
+        width: displayWidth,
+        filterQuality: _actualSize ? FilterQuality.none : FilterQuality.medium,
+      ),
+    );
 
     return Container(
       color: t.colorScheme.surfaceContainerHighest,
-      child: Stack(children: [
-        if (r == null)
-          const Center(child: CircularProgressIndicator())
-        else
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            child: Center(
-              child: Column(children: [
-                if (r.segments.isEmpty)
-                  const Padding(padding: EdgeInsets.all(32), child: Text('Nothing to print yet.')),
-                for (var i = 0; i < _images.length; i++) ...[
-                  if (i > 0) _CutMarker(width: displayWidth, cut: profile.hasCutter),
-                  paper(_images[i]),
-                ],
-                if (r.segments.isNotEmpty) _CutMarker(width: displayWidth, cut: endCut),
-                const SizedBox(height: 8),
-                Text(
-                  key: const Key('receipt-info'),
-                  '${r.width} dots · ${(r.height / 8).toStringAsFixed(0)} mm'
-                  ' · ${r.segments.length} ${r.segments.length == 1 ? 'piece' : 'pieces'}'
-                  ' · ${(r.bytes / 1024).toStringAsFixed(1)} KiB',
-                  style: t.textTheme.bodySmall,
+      child: Stack(
+        children: [
+          if (r == null)
+            const Center(child: CircularProgressIndicator())
+          else
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              child: Center(
+                child: Column(
+                  children: [
+                    if (r.segments.isEmpty)
+                      const Padding(padding: EdgeInsets.all(32), child: Text('Nothing to print yet.')),
+                    for (var i = 0; i < _images.length; i++) ...[
+                      if (i > 0) _CutMarker(width: displayWidth, cut: profile.hasCutter),
+                      paper(_images[i]),
+                    ],
+                    if (r.segments.isNotEmpty) _CutMarker(width: displayWidth, cut: endCut),
+                    const SizedBox(height: 8),
+                    Text(
+                      key: const Key('receipt-info'),
+                      '${r.width} dots · ${(r.height / 8).toStringAsFixed(0)} mm'
+                      ' · ${r.segments.length} ${r.segments.length == 1 ? 'piece' : 'pieces'}'
+                      ' · ${(r.bytes / 1024).toStringAsFixed(1)} KiB',
+                      style: t.textTheme.bodySmall,
+                    ),
+                    for (final w in r.warnings)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text('⚠ $w', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.error)),
+                      ),
+                  ],
                 ),
-                for (final w in r.warnings)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text('⚠ $w', style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.error)),
-                  ),
-              ]),
+              ),
+            ),
+          Positioned(
+            right: 8,
+            top: 8,
+            child: IconButton.filledTonal(
+              onPressed: () => setState(() => _actualSize = !_actualSize),
+              icon: Icon(_actualSize ? Icons.zoom_out_map : Icons.fit_screen_outlined),
+              tooltip: _actualSize ? 'Paper size' : 'Actual dots (1 dot = 1 pixel)',
             ),
           ),
-        Positioned(
-          right: 8,
-          top: 8,
-          child: IconButton.filledTonal(
-            onPressed: () => setState(() => _actualSize = !_actualSize),
-            icon: Icon(_actualSize ? Icons.zoom_out_map : Icons.fit_screen_outlined),
-            tooltip: _actualSize ? 'Paper size' : 'Actual dots (1 dot = 1 pixel)',
-          ),
-        ),
-        if (_rendering) const Positioned(left: 0, right: 0, top: 0, child: LinearProgressIndicator(minHeight: 2)),
-      ]),
+          if (_rendering) const Positioned(left: 0, right: 0, top: 0, child: LinearProgressIndicator(minHeight: 2)),
+        ],
+      ),
     );
   }
 }
@@ -537,9 +625,9 @@ class _DialogHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-        child: Text(text, style: Theme.of(context).textTheme.labelLarge),
-      );
+    padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+    child: Text(text, style: Theme.of(context).textTheme.labelLarge),
+  );
 }
 
 /// Dashed line with scissors (cut) or a tear-off hint between slips.
@@ -555,13 +643,17 @@ class _CutMarker extends StatelessWidget {
     return SizedBox(
       width: width + 40,
       height: 28,
-      child: Row(children: [
-        Icon(cut ? Icons.content_cut : Icons.more_horiz, size: 16, color: color),
-        const SizedBox(width: 4),
-        Expanded(child: CustomPaint(size: const Size.fromHeight(1), painter: _DashPainter(color))),
-        const SizedBox(width: 4),
-        Text(cut ? 'cut' : 'tear', style: TextStyle(fontSize: 11, color: color)),
-      ]),
+      child: Row(
+        children: [
+          Icon(cut ? Icons.content_cut : Icons.more_horiz, size: 16, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: CustomPaint(size: const Size.fromHeight(1), painter: _DashPainter(color)),
+          ),
+          const SizedBox(width: 4),
+          Text(cut ? 'cut' : 'tear', style: TextStyle(fontSize: 11, color: color)),
+        ],
+      ),
     );
   }
 }
