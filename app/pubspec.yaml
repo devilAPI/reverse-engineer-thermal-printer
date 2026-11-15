@@ -39,12 +39,16 @@ dependencies:
   universal_ble: ^3.3.0
   ffi: ^2.2.0
   shared_preferences: ^2.5.5
+  barcode: ^2.2.9
+  qr: ^3.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # In-memory prefs store so integration tests don't touch the user's settings.
+  shared_preferences_platform_interface: ^2.4.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -63,6 +67,20 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Receipt editor fonts, bundled so receipts rasterise identically
+  # everywhere (assets/fonts/LICENSE.txt).
+  fonts:
+    - family: ReceiptSans
+      fonts:
+        - asset: assets/fonts/DejaVuSans.ttf
+        - asset: assets/fonts/DejaVuSans-Bold.ttf
+          weight: 700
+    - family: ReceiptMono
+      fonts:
+        - asset: assets/fonts/DejaVuSansMono.ttf
+        - asset: assets/fonts/DejaVuSansMono-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:
