@@ -12,12 +12,26 @@ Chinese ESC/POS thermal receipt printers. Targets:
 |---|---|
 | `app/` | Flutter app (Android, iOS, Linux, macOS, Windows, Web) |
 | `app/lib/core/` | Pure Dart: image pipeline (dithering), ESC/POS encoder, printer profiles |
-| `app/lib/transport/` | Byte pipes: device node, TCP 9100, BLE (more to come: USB host, WebUSB) |
-| `tools/` | `probe.sh` (USB enumeration), `escpos_image.py` (reference encoder for hardware tests) |
+| `app/lib/transport/` | Byte pipes — see table below |
+| `tools/hwtest.py` | Hardware harness: detect/dump/status/test pages/raw/BLE — auto-logs to `docs/hardware/` |
+| `tools/escpos_render.py` | ESC/POS → PNG emulator to check jobs without paper |
+| `tools/probe.sh`, `tools/escpos_image.py` | Quick USB probe, reference photo encoder |
 | `linux/99-thermal-printer.rules` | udev rule granting the desktop user raw printer access |
 | `docs/RESEARCH.md` | Protocol & hardware findings with sources |
 | `docs/REVERSE_ENGINEERING_LOG.md` | Step-by-step lab notebook of the reverse engineering |
 | `.github/workflows/` | CI: every push to `master` → tests + Android/Linux/Windows/macOS/iOS/web builds → `dev-N` prerelease; web on GitHub Pages |
+
+## Transports (all driverless)
+
+| Transport | Platforms | Status |
+|---|---|---|
+| libusb (dart:ffi) | Linux, macOS | enumerates on Linux ✔, printing awaits hardware |
+| Device node `/dev/usb/lp*`, `/dev/ttyACM*`, `/dev/rfcomm*`, `/dev/cu.*` | Linux, macOS | awaits hardware |
+| Windows usbprint (SetupAPI + CreateFile) | Windows | compiled, unverified |
+| Android USB host (Kotlin channel) | Android | compiled, awaits hardware |
+| BLE (`universal_ble`) | all incl. iOS & Web | awaits hardware |
+| Raw TCP 9100 | all but Web | awaits LAN model |
+| Debug dump (`THERMAL_PHOTO_DUMP=file`) | desktop | ✔ integration-tested |
 
 ## How printing works
 
@@ -35,6 +49,18 @@ sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm contro
 cd app
 flutter test
 flutter run -d linux
+# end-to-end without hardware:
+THERMAL_PHOTO_DUMP=/tmp/job.bin flutter test integration_test -d linux
+python3 ../tools/escpos_render.py /tmp/job.bin --width 384 -o /tmp/paper.png
+```
+
+Hardware harness (once the udev rule is installed):
+
+```sh
+python3 -m venv tools/.venv && tools/.venv/bin/pip install pyusb pyserial pillow bleak
+H="tools/.venv/bin/python tools/hwtest.py --label hz8360 --width 576"
+$H detect; $H dump; $H status
+$H print text ruler gradient bands density cut --observe
 ```
 
 ## License

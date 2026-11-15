@@ -1,6 +1,23 @@
+/// How a printer model accepts a print-density (heat) setting.
+enum DensityCommand {
+  /// Not supported / unknown: send nothing.
+  none,
+
+  /// `ESC 7 n1 n2 n3` — max heating dots, heating time, interval
+  /// (Adafruit/CSN-A2 and some Zijiang firmwares; NOT in the MPT-II manual).
+  esc7,
+
+  /// `DC2 # n` — bits 0-4 density, bits 5-7 break time (some Chinese firmwares).
+  dc2Hash,
+
+  /// `GS E n` — "head control method", dot-line time 0.8 ms + n*0.1 ms,
+  /// n = 0..15. The only darkness control in the MPT-II Programming Manual.
+  gsE,
+}
+
 /// Static description of a supported printer model.
 ///
-/// Values come from the vendor manuals (see repo /docs). Transfer tuning
+/// Values come from the vendor manuals (see docs/RESEARCH.md). Transfer tuning
 /// (band height, chunk size, delay) is conservative until verified on hardware.
 class PrinterProfile {
   const PrinterProfile({
@@ -12,6 +29,7 @@ class PrinterProfile {
     this.bandHeight = 255,
     this.chunkSize = 4096,
     this.chunkDelay = Duration.zero,
+    this.density = DensityCommand.esc7,
     this.usbIds = const [],
   });
 
@@ -32,6 +50,8 @@ class PrinterProfile {
   final int chunkSize;
   final Duration chunkDelay;
 
+  final DensityCommand density;
+
   /// Known USB vendor/product IDs (hex pairs) for auto-detection.
   final List<(int, int)> usbIds;
 
@@ -39,13 +59,14 @@ class PrinterProfile {
 
   static const mp583 = PrinterProfile(
     id: 'mp583',
-    name: 'MP583 (58 mm mobile)',
+    name: 'MP583 / MPT-II (58 mm mobile)',
     paperWidthMm: 58,
     dotsPerLine: 384,
     hasCutter: false,
     bandHeight: 128, // 48 B * 128 = 6 KB per command, well under 40 KB
     chunkSize: 512,
     chunkDelay: Duration(milliseconds: 20),
+    density: DensityCommand.gsE,
   );
 
   static const hz8360 = PrinterProfile(
@@ -58,7 +79,32 @@ class PrinterProfile {
     chunkSize: 4096,
   );
 
-  static const all = [mp583, hz8360];
+  static const generic58 = PrinterProfile(
+    id: 'generic58',
+    name: 'Generic 58 mm ESC/POS',
+    paperWidthMm: 58,
+    dotsPerLine: 384,
+    hasCutter: false,
+    bandHeight: 64,
+    chunkSize: 512,
+    chunkDelay: Duration(milliseconds: 20),
+    density: DensityCommand.none,
+  );
+
+  static const generic80 = PrinterProfile(
+    id: 'generic80',
+    name: 'Generic 80 mm ESC/POS',
+    paperWidthMm: 80,
+    dotsPerLine: 576,
+    hasCutter: true,
+    bandHeight: 128,
+    chunkSize: 2048,
+    density: DensityCommand.none,
+  );
+
+  static const all = [mp583, hz8360, generic58, generic80];
+
+  static PrinterProfile byId(String? id) => all.firstWhere((p) => p.id == id, orElse: () => mp583);
 
   /// USB IDs listed in the vendor's Android SDK (cn.com.zj.usbdemo).
   static const vendorSdkUsbIds = <(int, int)>[

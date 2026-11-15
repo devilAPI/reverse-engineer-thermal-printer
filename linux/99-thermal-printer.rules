@@ -1,7 +1,17 @@
-# Give logged-in users raw access to cheap ESC/POS thermal printers (no driver needed).
-# Install: sudo cp 99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
-# USB printer class (usblp -> /dev/usb/lp*) and raw libusb access
+# Give the logged-in desktop user raw access to cheap ESC/POS thermal printers
+# (no driver needed). Install:
+#   sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger
+#
+# 1) Any USB printer-class device (interface 07/01/xx), whatever its VID:PID:
+#    raw libusb access (needed to detach usblp / read status) ...
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:0701*", TAG+="uaccess"
+#    ... and the usblp node /dev/usb/lp*
 SUBSYSTEM=="usbmisc", KERNEL=="lp[0-9]*", TAG+="uaccess"
-SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{bDeviceClass}=="00", ATTRS{idVendor}=="0416|0483|0493|1cbe|1cb0|1659|0fe6|28e9|1fc9|6868", TAG+="uaccess"
-# CDC-ACM serial printers (/dev/ttyACM*)
+
+# 2) Known thermal-printer controllers (STM32 VCP, Winbond, GD32, ...) incl. CDC/vendor class
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0416|0483|0493|1cbe|1cb0|1659|0fe6|28e9|1fc9|6868", TAG+="uaccess"
 SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="0416|0483|0493|1cbe|1cb0|1659|0fe6|28e9|1fc9|6868", TAG+="uaccess"
+
+# 3) Bluetooth SPP bound with `rfcomm bind` (/dev/rfcomm*)
+KERNEL=="rfcomm[0-9]*", TAG+="uaccess"

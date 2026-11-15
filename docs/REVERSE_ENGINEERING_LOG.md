@@ -140,11 +140,57 @@ per line. So the vendor output is poor for photos; we dither ourselves.
 Linux 6.8 (Ubuntu 24.04). `cdc_acm` loaded, `usblp` not yet loaded,
 user not in `lp` group → udev rule `linux/99-thermal-printer.rules` (uaccess).
 
+### 9. Research round 2 — official MPT-II manual found
+
+The *MPT-II Programming Manual Rev 1.1* is in
+[MYCAMEL222/ArduinoBLE_MPTII_ThermalPrinters](https://github.com/MYCAMEL222/ArduinoBLE_MPTII_ThermalPrinters).
+Consequences for the app:
+
+- MP583 darkness changed from `ESC 7` (from PT-210 SDK docs) to **`GS E n`**,
+  the only documented control. The harness `density` page now prints
+  `GS E 0/5/10/15`, `ESC 7 …` and `DC2 # …` side by side: whichever bars differ
+  tell us what the firmware really accepts.
+- The manual documents **no real-time status** (`DLE EOT`) — only `ESC v`.
+  The harness tries all of them; the app shows "status unknown" when nothing answers.
+- 80 mm status bit layout taken from the Xprinter-lineage 80XX manual (proxy);
+  encoded in `app/lib/core/status.dart` with unit tests.
+
+Details and sources: RESEARCH.md.
+
+### 10. Hardware test harness + emulator (no hardware needed)
+
+- `tools/hwtest.py` (pyusb / device node / BLE via bleak): `detect`, `dump`
+  (descriptors, IEEE-1284 `GET_DEVICE_ID`, `GET_PORT_STATUS`), `status`
+  (DLE EOT 1-4, GS r, ESC v, GS a, GS I 1-3/65-69), `print` pages
+  (`text ruler gradient bands density modes escstar cut selftest beep photo`),
+  `raw <hex>`, `ble-scan`, `ble-dump`. **Every action auto-appends to
+  `docs/hardware/<label>/log.md`** (TX/RX hex, timing, `--observe` notes).
+- `tools/escpos_render.py`: renders a job to PNG (GS v 0 m0-3, ESC *, text,
+  cut marks). Used to verify harness pages and the app's output.
+
+Without the udev rule, pyusb can only list devices (`Access denied` on
+config reads) — expected; the rule now matches *any* printer-class interface
+via `ENV{ID_USB_INTERFACES}=="*:0701*"` because the HZ-8360's VID:PID is unknown.
+
+### 11. App transports added
+
+- libusb via `dart:ffi` (Linux/macOS): enumerates without opening, ranks
+  interfaces printer(07) > CDC(0A) > vendor(FF, only known IDs — otherwise
+  phones/ADB show up: a ZTE `19d2:0306` did during testing), detaches
+  usblp/cdc_acm, bulk write + bulk-IN status read.
+- Windows usbprint via SetupAPI/CreateFile (**unverified**, compiled by CI).
+- Debug dump transport (`THERMAL_PHOTO_DUMP=path`) + Linux integration test
+  (`flutter test integration_test -d linux`): photo → preview → Print → bytes
+  checked; test page checked. Passes.
+
 ---
 
 ## Next: hardware session (to do)
 
-For each printer:
+Setup once: `sudo cp linux/99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger`
+
+For each printer (`H="tools/.venv/bin/python tools/hwtest.py --label <model>"`):
+0. `$H detect` → `$H dump` → `$H status`
 1. `lsusb` before/after plugging → VID:PID
 2. `tools/probe.sh VID:PID` → interface class (07 printer / 02+0A CDC / FF vendor), endpoints, driver
 3. Self-test page (photo it, note firmware version / codepage / BT name)

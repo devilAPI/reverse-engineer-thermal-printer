@@ -56,3 +56,9 @@ Future<void> sendChunked(
     if (delay > Duration.zero && end < job.length) await Future<void>.delayed(delay);
   }
 }
+
+/// Optional capability: connections that can read bytes back from the printer
+/// (status replies to DLE EOT / GS r / GS I). BLE notify, libusb bulk-IN, serial.
+abstract class PrinterStatusReader {
+  Future<Uint8List> read({Duration timeout = const Duration(milliseconds: 500)});
+}

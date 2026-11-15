@@ -121,7 +121,7 @@ jobs:
       - name: Install Linux build dependencies
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          packages: clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev xvfb libusb-1.0-0
           version: 1
       - uses: subosito/flutter-action@v2
         with:
@@ -131,6 +131,8 @@ jobs:
       - name: Build bundle
         run: |
           flutter pub get
+          # end-to-end test of the real Linux app (no hardware: dump transport)
+          THERMAL_PHOTO_DUMP="$RUNNER_TEMP/job.bin" xvfb-run -a flutter test integration_test -d linux
           flutter build linux --release --build-number="$BUILD_NUMBER"
           mkdir -p dist
           tar -czf "dist/thermal-photo-${TAG}-linux-x64.tar.gz" -C build/linux/x64/release/bundle .
@@ -166,7 +168,8 @@ jobs:
 
   build-windows:
     name: Build Windows
-    runs-on: windows-latest
+    # Flutter 3.35 does not know the Visual Studio on windows-latest yet
+    runs-on: windows-2022
     defaults:
       run:
         shell: bash

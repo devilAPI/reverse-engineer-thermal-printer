@@ -2,3 +2,4 @@
 *.rar
 *.pdf
 vendor/
+tools/.venv/
