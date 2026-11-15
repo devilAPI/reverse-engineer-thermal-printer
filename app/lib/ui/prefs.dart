@@ -67,6 +67,14 @@ class Prefs {
     _p.setBool('cut', j.cut);
   }
 
+  /// Receipt being edited (JSON), restored on start.
+  String? get receiptDraft => _p.getString('receipt.draft');
+  set receiptDraft(String? v) => _set('receipt.draft', v);
+
+  /// Saved receipts (JSON array, see receipt/editor.dart).
+  String? get savedReceipts => _p.getString('receipt.saved');
+  set savedReceipts(String? v) => _set('receipt.saved', v);
+
   void _set(String k, Object? v) {
     switch (v) {
       case null:
