@@ -19,6 +19,13 @@ class PrinterEndpoint {
   final int? usbVendorId;
   final int? usbProductId;
 
+  /// Identity is (transport, id): rescans create new objects for the same device.
+  @override
+  bool operator ==(Object other) => other is PrinterEndpoint && other.transport == transport && other.id == id;
+
+  @override
+  int get hashCode => Object.hash(transport, id);
+
   @override
   String toString() => '$label [$transport:$id]';
 }

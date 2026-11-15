@@ -39,9 +39,12 @@ class LibusbTransport implements PrinterTransport {
           // offer them for known printer controllers.
           if (info.ifClass == 0xFF && !known) continue;
           final cls = switch (info.ifClass) { 0x07 => 'printer', 0x0A => 'CDC', 0xFF => 'vendor', _ => '0x${info.ifClass.toRadixString(16)}' };
+          // Stable across replug/power-cycle (the bus address is not): "vid:pid", "#n" for duplicates.
+          final base = '${_hex(info.vid)}:${_hex(info.pid)}';
+          final dup = out.where((e) => e.id == base || e.id.startsWith('$base#')).length;
           out.add(PrinterEndpoint(
             transport: name,
-            id: '${info.bus}:${info.address}:${_hex(info.vid)}:${_hex(info.pid)}',
+            id: dup == 0 ? base : '$base#$dup',
             label: 'USB ${_hex(info.vid)}:${_hex(info.pid)} ($cls)${known ? ' ★' : ''}',
             usbVendorId: info.vid,
             usbProductId: info.pid,
@@ -58,8 +61,10 @@ class LibusbTransport implements PrinterTransport {
   @override
   Future<PrinterConnection> open(PrinterEndpoint endpoint) async {
     final lib = _Libusb.instance!;
-    final parts = endpoint.id.split(':');
-    final bus = int.parse(parts[0]), addr = int.parse(parts[1]);
+    final hashAt = endpoint.id.indexOf('#');
+    final ids = (hashAt < 0 ? endpoint.id : endpoint.id.substring(0, hashAt)).split(':');
+    final wantVid = int.parse(ids[0], radix: 16), wantPid = int.parse(ids[1], radix: 16);
+    var skip = hashAt < 0 ? 0 : int.parse(endpoint.id.substring(hashAt + 1));
     final ctxPtr = calloc<Pointer<Void>>();
     _check(lib.init(ctxPtr), 'libusb_init');
     final ctx = ctxPtr.value;
@@ -72,8 +77,9 @@ class LibusbTransport implements PrinterTransport {
       final n = lib.getDeviceList(ctx, listPtr);
       for (var i = 0; i < n; i++) {
         final dev = listPtr.value[i];
-        if (lib.getBusNumber(dev) == bus && lib.getDeviceAddress(dev) == addr) {
-          info = lib.describe(dev);
+        final d = lib.describe(dev);
+        if (d != null && d.vid == wantVid && d.pid == wantPid && skip-- == 0) {
+          info = d;
           final hp = calloc<Pointer<Void>>();
           final r = lib.open(dev, hp);
           handle = hp.value;

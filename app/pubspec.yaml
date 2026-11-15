@@ -39,6 +39,7 @@ dependencies:
   universal_ble: ^3.3.0
   ffi: ^2.2.0
   shared_preferences: ^2.5.5
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
 import '../core/image_pipeline.dart';
@@ -37,6 +38,7 @@ class _HomePageState extends State<HomePage> {
   MonoBitmap? _bitmap;
   ui.Image? _preview;
   Timer? _debounce;
+  Timer? _hotplug;
   int _convertSeq = 0;
 
   List<PrinterTransport> _transports = availableTransports();
@@ -71,12 +73,16 @@ class _HomePageState extends State<HomePage> {
     final initial = widget.initialImage;
     if (initial != null) await _openPhoto(XFile(initial));
     // Web Bluetooth needs a user gesture to scan; don't auto-scan there.
-    if (!kIsWeb) await _scan();
+    if (!kIsWeb) {
+      await _scan();
+      _hotplug = Timer.periodic(const Duration(seconds: 3), (_) => _quickRefresh());
+    }
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _hotplug?.cancel();
     _hostCtl.dispose();
     super.dispose();
   }
@@ -97,11 +103,36 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openPhoto(XFile file) async {
     setState(() => _status = 'Decoding ${file.name}…');
-    final bytes = await file.readAsBytes();
+    await _openBytes(await file.readAsBytes(), file.name);
+  }
+
+  Future<void> _loadFromUrl() async {
+    final url = await showDialog<String>(context: context, builder: (_) => const _UrlDialog());
+    final uri = Uri.tryParse(url?.trim() ?? '');
+    if (uri == null || !uri.hasScheme || !(uri.isScheme('http') || uri.isScheme('https'))) {
+      if (url != null && url.trim().isNotEmpty) setState(() => _status = 'Not a valid http(s) URL.');
+      return;
+    }
+    setState(() => _status = 'Downloading ${uri.host}…');
+    try {
+      final res = await http.get(uri).timeout(const Duration(seconds: 30));
+      if (res.statusCode != 200) throw StateError('HTTP ${res.statusCode}');
+      const maxBytes = 50 * 1024 * 1024;
+      if (res.bodyBytes.length > maxBytes) throw StateError('image larger than 50 MB');
+      final name = uri.pathSegments.where((s) => s.isNotEmpty).lastOrNull ?? uri.host;
+      await _openBytes(res.bodyBytes, name);
+    } on Object catch (e) {
+      setState(() => _status = kIsWeb
+          ? 'Download failed: $e (in the browser the site must allow cross-origin requests; the desktop/mobile app has no such limit)'
+          : 'Download failed: $e');
+    }
+  }
+
+  Future<void> _openBytes(Uint8List bytes, String name) async {
     try {
       final photo = await compute(decodePhoto, bytes);
       _photo = photo;
-      _photoName = file.name;
+      _photoName = name;
       await _reconvert();
       setState(() => _status = null);
     } on Object catch (e) {
@@ -164,17 +195,51 @@ class _HomePageState extends State<HomePage> {
       }
     }
     if (!mounted) return;
+    setState(() => _scanning = false);
+    _applyEndpoints(found);
+    if (found.isEmpty) setState(() => _status = 'No printer found. Plug it in / switch it on, then refresh.');
+  }
+
+  /// Transports whose discovery is instant and local (USB/device nodes):
+  /// polled every few seconds so plug/unplug shows up without Refresh.
+  static const _cheap = {'libusb', 'device', 'usbprint', 'usb', 'dump'};
+
+  Future<void> _quickRefresh() async {
+    if (_busy || _scanning || !mounted) return;
+    final fresh = <PrinterEndpoint>[];
+    for (final t in _transports.where((t) => _cheap.contains(t.name))) {
+      try {
+        fresh.addAll(await t.discover());
+      } on Object {
+        // ignore; full scan reports errors
+      }
+    }
+    if (!mounted || _busy || _scanning) return;
+    final merged = [...fresh, ..._endpoints.where((e) => !_cheap.contains(e.transport))];
+    if (merged.length == _endpoints.length && merged.toSet().containsAll(_endpoints)) return;
+    _applyEndpoints(merged);
+  }
+
+  /// Update the list without ever silently switching to a different printer:
+  /// keep the current/remembered choice if present; if it vanished, select
+  /// nothing and say so.
+  void _applyEndpoints(List<PrinterEndpoint> found) {
     final remembered = _prefs?.endpointId;
+    final current = _endpoint;
+    PrinterEndpoint? next;
+    String? msg;
+    if (current != null) {
+      next = found.where((e) => e == current).firstOrNull;
+      if (next == null) msg = '"${current.label}" is no longer available.';
+    } else {
+      next = found.where((e) => _key(e) == remembered).firstOrNull ?? (remembered == null ? found.firstOrNull : null);
+    }
     setState(() {
-      _scanning = false;
       _endpoints = found;
-      _endpoint = found.where((e) => _key(e) == remembered).firstOrNull ??
-          found.where((e) => _key(e) == (_endpoint == null ? null : _key(_endpoint!))).firstOrNull ??
-          found.firstOrNull;
-      if (found.isEmpty) _status = 'No printer found. Plug it in / switch it on, then refresh.';
+      _endpoint = next;
+      if (msg != null) _status = msg;
     });
-    final ep = _endpoint;
-    if (ep != null && remembered == null) _autoProfile(ep);
+    if (next != null && current == null && remembered == null) _autoProfile(next);
   }
 
   /// Switch the model to match a newly chosen connection (USB ID / BT name).
@@ -272,6 +337,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Thermal Photo'),
         actions: [
+          IconButton(onPressed: _loadFromUrl, icon: const Icon(Icons.link), tooltip: 'Load photo from URL'),
           IconButton(onPressed: _pickPhoto, icon: const Icon(Icons.add_photo_alternate_outlined), tooltip: 'Choose photo'),
         ],
       ),
@@ -315,11 +381,18 @@ class _HomePageState extends State<HomePage> {
       alignment: Alignment.topCenter,
       child: p == null || bmp == null
           ? Center(
-              child: FilledButton.icon(
-                onPressed: _pickPhoto,
-                icon: const Icon(Icons.photo),
-                label: const Text('Choose a photo'),
-              ),
+              child: Wrap(spacing: 12, runSpacing: 12, alignment: WrapAlignment.center, children: [
+                FilledButton.icon(
+                  onPressed: _pickPhoto,
+                  icon: const Icon(Icons.photo),
+                  label: const Text('Choose a photo'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loadFromUrl,
+                  icon: const Icon(Icons.link),
+                  label: const Text('Load from URL'),
+                ),
+              ]),
             )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -357,9 +430,9 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       children: [
         Text('Printer', style: t.titleSmall),
-        DropdownButtonFormField<PrinterProfile>(
-          initialValue: _profile,
-          decoration: const InputDecoration(labelText: 'Model'),
+        _dropdown<PrinterProfile>(
+          label: 'Model',
+          value: _profile,
           items: [for (final p in PrinterProfile.all) DropdownMenuItem(value: p, child: Text(p.name))],
           onChanged: (p) {
             if (p == null) return;
@@ -370,11 +443,10 @@ class _HomePageState extends State<HomePage> {
         ),
         Row(children: [
           Expanded(
-            child: DropdownButtonFormField<PrinterEndpoint>(
-              key: ValueKey(_endpoints.length),
-              initialValue: _endpoint,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Connection'),
+            child: _dropdown<PrinterEndpoint>(
+              label: 'Connection',
+              value: _endpoint,
+              hint: _endpoints.isEmpty ? 'No printer found' : 'Choose a printer',
               items: [
                 for (final e in _endpoints) DropdownMenuItem(value: e, child: Text(e.label, overflow: TextOverflow.ellipsis)),
               ],
@@ -483,6 +555,32 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Fully controlled dropdown: always shows [value] from state
+  /// (DropdownButtonFormField keeps its own copy and can go stale).
+  Widget _dropdown<T>({
+    required String label,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    String? hint,
+  }) {
+    final v = items.any((i) => i.value == value) ? value : null;
+    return InputDecorator(
+      decoration: InputDecoration(labelText: label, contentPadding: const EdgeInsets.symmetric(vertical: 4)),
+      isEmpty: v == null && hint == null,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: v,
+          isExpanded: true,
+          isDense: true,
+          hint: hint == null ? null : Text(hint),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
   Widget _slider(String label, double value, double min, double max, ValueChanged<double> onChanged) {
     return Row(children: [
       SizedBox(width: 84, child: Text(label)),
@@ -490,4 +588,37 @@ class _HomePageState extends State<HomePage> {
       SizedBox(width: 40, child: Text(value.toStringAsFixed(2), textAlign: TextAlign.end)),
     ]);
   }
+}
+
+class _UrlDialog extends StatefulWidget {
+  const _UrlDialog();
+
+  @override
+  State<_UrlDialog> createState() => _UrlDialogState();
+}
+
+class _UrlDialogState extends State<_UrlDialog> {
+  final _ctl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Load photo from URL'),
+        content: TextField(
+          controller: _ctl,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(hintText: 'https://example.com/photo.jpg'),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, _ctl.text), child: const Text('Load')),
+        ],
+      );
 }

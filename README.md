@@ -50,7 +50,7 @@ cd app
 flutter test
 flutter run -d linux
 # end-to-end without hardware:
-THERMAL_PHOTO_DUMP=/tmp/job.bin flutter test integration_test -d linux
+THERMAL_PHOTO_DUMP=/tmp/job.bin flutter test integration_test -d linux --dart-define=THERMAL_PHOTO_TEST=true
 python3 ../tools/escpos_render.py /tmp/job.bin --width 384 -o /tmp/paper.png
 ```
 

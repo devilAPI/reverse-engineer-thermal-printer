@@ -251,6 +251,32 @@ All via libusb bulk OUT 0x01, no chunk delay, no errors:
 Consequence: HZ-8360 needs no chunk delay over USB; band height 255 is safe
 (1024 also works).
 
+### 15. HZ-8360 in the app; MP583 over Bluetooth
+
+- HZ-8360 via the app (libusb transport): test page + photo print **work**.
+- MP583: user paired it via the desktop; app's BLE connection errored.
+
+`bluetoothctl info DC:0D:51:D2:17:F9`:
+```
+Name: MP583   Class: 0x00040680 (printer)   Paired/Bonded/Trusted: yes   (public address)
+UUIDs: SDP, RFCOMM, L2CAP, Serial Port 0x1101, PnP 0x1200,
+       0x18F0, e7810a71-73ae-499d-8c15-faa9aef0c3f2, ffcacade-afde-cade-defa-cade00000000
+ManufacturerData 0x434B = dc0d51d217f9 (its own MAC)
+```
+- BT name is **`MP583`**, not `MPT-II` as in the manual.
+- **Dual-mode**: Classic SPP + BLE services (18F0 = MPT-II/PT-210 family;
+  e7810a71… is the same UUID NIIMBOT label printers use).
+- BLE via bleak → `org.bluez.Error.NotAvailable br-connection-profile-unavailable`:
+  BlueZ 5.72 picks BR/EDR for a paired dual-mode device with one public address,
+  so GATT can't be reached while it's bonded classically. LE scan shows the same
+  address only.
+- **Classic SPP works without root**: Python `socket(AF_BLUETOOTH, SOCK_STREAM,
+  BTPROTO_RFCOMM)` → connect `(MAC, 1)` → print OK.
+  Status over SPP: `ESC v` → `00`; `DLE EOT 1` → `12` (online) — so DLE EOT
+  **is** supported despite not being in the MPT-II manual.
+- App: new `LinuxRfcommTransport` (libc socket via dart:ffi; lists paired
+  devices offering UUID 0x1101 via `bluetoothctl`), status readable.
+
 ## Next: hardware session (to do)
 
 Setup once:

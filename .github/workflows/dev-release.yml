@@ -132,7 +132,7 @@ jobs:
         run: |
           flutter pub get
           # end-to-end test of the real Linux app (no hardware: dump transport)
-          THERMAL_PHOTO_DUMP="$RUNNER_TEMP/job.bin" xvfb-run -a flutter test integration_test -d linux
+          THERMAL_PHOTO_DUMP="$RUNNER_TEMP/job.bin" xvfb-run -a flutter test integration_test -d linux --dart-define=THERMAL_PHOTO_TEST=true
           flutter build linux --release --build-number="$BUILD_NUMBER"
           mkdir -p dist
           tar -czf "dist/thermal-photo-${TAG}-linux-x64.tar.gz" -C build/linux/x64/release/bundle .

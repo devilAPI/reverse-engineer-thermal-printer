@@ -113,7 +113,7 @@ class PrinterProfile {
       if (vid != null && p.usbIds.contains((vid, pid))) return p;
     }
     final l = (label ?? '').toLowerCase();
-    if (RegExp(r'mpt|mp58|pt-?2\d\d|58mm|pos58|pos-58').hasMatch(l)) return mp583;
+    if (RegExp(r'mpt|mp58|mp583|pt-?2\d\d|58mm|pos58|pos-58').hasMatch(l)) return mp583;
     if (RegExp(r'8360|80mm|pos80|pos-80').hasMatch(l)) return hz8360;
     return null;
   }

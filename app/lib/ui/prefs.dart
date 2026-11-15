@@ -5,11 +5,25 @@ import '../core/print_job.dart';
 
 /// Persisted user choices (per device, via shared_preferences).
 class Prefs {
-  Prefs._(this._p);
-  final SharedPreferencesWithCache _p;
+  Prefs._(this._raw);
+  final SharedPreferencesWithCache _raw;
+
+  /// Integration tests run with `--dart-define=THERMAL_PHOTO_TEST=true` and get
+  /// their own key namespace, so they never read or clobber real settings.
+  static const testMode = bool.fromEnvironment('THERMAL_PHOTO_TEST');
+  static const _prefix = testMode ? 'test.' : '';
+
+  late final _p = _Prefixed(_raw, _prefix);
 
   static Future<Prefs> load() async =>
       Prefs._(await SharedPreferencesWithCache.create(cacheOptions: const SharedPreferencesWithCacheOptions()));
+
+  /// Remove every key of the current namespace (used by tests).
+  Future<void> clear() async {
+    for (final k in _raw.keys.where((k) => k.startsWith(_prefix)).toList()) {
+      if (_prefix.isNotEmpty || !k.startsWith('test.')) await _raw.remove(k);
+    }
+  }
 
   String? get profileId => _p.getString('profile');
   set profileId(String? v) => _set('profile', v);
@@ -63,4 +77,20 @@ class Prefs {
         _p.setDouble(k, d);
     }
   }
+}
+
+class _Prefixed {
+  _Prefixed(this._p, this._x);
+  final SharedPreferencesWithCache _p;
+  final String _x;
+
+  String? getString(String k) => _p.getString('$_x$k');
+  double? getDouble(String k) => _p.getDouble('$_x$k');
+  int? getInt(String k) => _p.getInt('$_x$k');
+  bool? getBool(String k) => _p.getBool('$_x$k');
+  Future<void> setString(String k, String v) => _p.setString('$_x$k', v);
+  Future<void> setDouble(String k, double v) => _p.setDouble('$_x$k', v);
+  Future<void> setInt(String k, int v) => _p.setInt('$_x$k', v);
+  Future<void> setBool(String k, bool v) => _p.setBool('$_x$k', v);
+  Future<void> remove(String k) => _p.remove('$_x$k');
 }
