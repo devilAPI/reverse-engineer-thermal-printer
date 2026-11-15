@@ -277,6 +277,23 @@ ManufacturerData 0x434B = dc0d51d217f9 (its own MAC)
 - App: new `LinuxRfcommTransport` (libc socket via dart:ffi; lists paired
   devices offering UUID 0x1101 via `bluetoothctl`), status readable.
 
+### 16. Windows: driverless paths, verified on the CI runner (no printer)
+
+- **USB printer class (HZ-8360):** Windows binds the inbox usbprint.sys;
+  the app opens the `GUID_DEVINTERFACE_USBPRINT` device path from SetupAPI
+  and does OVERLAPPED WriteFile/ReadFile with timeouts + CancelIoEx. First
+  status byte after open is often junk (0x2B) → one throw-away `DLE EOT 1`.
+- **COM ports (MP583 Bluetooth SPP, USB CDC):** SetupAPI
+  `GUID_DEVINTERFACE_COMPORT` + friendly names; the outgoing Bluetooth port
+  is recognised by the remote MAC in its instance id (incoming has
+  000000000000).
+- `test_windows/` runs on `windows-2022` before every build:
+  enumeration (runner shows `COM2 — Communications Port`), 40 KB overlapped
+  write/read round-trip, missing device, and a read on a silent named pipe
+  returning empty after 300 ms (= a printer that never answers can't hang
+  the app). The round-trip caught a real bug (all chunks written at offset 0).
+- Still unverified with a real printer on Windows → test with dev-10.
+
 ## Next: hardware session (to do)
 
 Setup once:
