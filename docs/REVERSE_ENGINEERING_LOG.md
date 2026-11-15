@@ -294,6 +294,47 @@ ManufacturerData 0x434B = dc0d51d217f9 (its own MAC)
   the app). The round-trip caught a real bug (all chunks written at offset 0).
 - Still unverified with a real printer on Windows → test with dev-10.
 
+### 17. MP583 Bluetooth "only works after toggling BT" (Linux)
+
+Symptom (user): printing over Bluetooth only worked right after toggling the
+PC's Bluetooth. Investigated with a Python RFCOMM probe that sends DLE EOT 1
+(prints nothing) and times `connect()`:
+
+| Experiment | Result |
+|---|---|
+| 3 tries, printer on | `Host is down` (EHOSTDOWN) after exactly **5.16 s** each |
+| LE scan before connecting | no effect |
+| BR/EDR inquiry before connecting | no effect (printer *is* seen, RSSI −65) |
+| power-cycle printer only | no effect |
+| power-cycle PC adapter, 5 tries | fail, fail, fail, **ok in 4.53 s**, ok in 0.04 s (ACL still up) |
+
+- 5.16 s = default HCI page timeout 8192 slots (5.12 s). Successful pages
+  took 4.4–4.5 s, so the printer answers pages at the very edge of the
+  window and most attempts time out. "Toggle BT" was not a fix, just a
+  lucky retry; the old app tried once and gave up.
+- Adapter: CSR `0a12:0001` dongle (HCI 6 / LMP subver 22bb).
+- BlueZ `[BR] PageTimeout=16384` in `/etc/bluetooth/main.conf` has **no
+  effect on kernel 6.8**: `hci_core.h` stores `def_page_timeout`, but
+  `hci_sync.c` never sends Write Page Timeout (checked v6.8 source);
+  `hciconfig hci0 pageto` still read 8192 after restart + power cycle.
+- `sudo hciconfig hci0 pageto 16384` works (until the adapter resets):
+  4/4 connects succeeded, but took 24 s, 15 s, 5 s, 4 s.
+- Two more app bugs found on the way, both caused by the Dart VM's signals
+  interrupting blocking libc calls (EINTR = errno 4):
+  - `connect()` returned EINTR and was reported as a failure. Now the app
+    waits for the pending connect with `poll(POLLOUT)` and reads
+    `SO_ERROR`.
+  - `poll()` in status reads returned EINTR, so the status was always
+    empty. Python got `0x12`; the app now loops on EINTR and also gets
+    `[18]`.
+
+Fix in `linux_rfcomm_transport.dart`:
+1. Connect runs in a helper isolate (UI no longer freezes for 5 s per try)
+   and retries EHOSTDOWN/ETIMEDOUT/EHOSTUNREACH up to 5×.
+2. A released link is **kept open for 3 min** and reused (`poll` checks for
+   HUP/ERR and drains stale input first). Measured: first connect 2.8 s,
+   next three jobs connect in 45–48 ms with status `0x12`.
+
 ## Next: hardware session (to do)
 
 Setup once:

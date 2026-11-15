@@ -26,13 +26,30 @@ Chinese ESC/POS thermal receipt printers. Targets:
 
 | Transport | Platforms | Status |
 |---|---|---|
-| libusb (dart:ffi) | Linux, macOS | enumerates on Linux ✔, printing awaits hardware |
-| Device node `/dev/usb/lp*`, `/dev/ttyACM*`, `/dev/rfcomm*`, `/dev/cu.*` | Linux, macOS | awaits hardware |
-| Windows usbprint (SetupAPI + CreateFile) | Windows | compiled, unverified |
+| libusb (dart:ffi) | Linux, macOS | ✔ HZ-8360 prints on Linux |
+| Device node `/dev/usb/lp*`, `/dev/ttyACM*`, `/dev/rfcomm*`, `/dev/cu.*` | Linux, macOS | ✔ HZ-8360 via `/dev/usb/lp0` |
+| Bluetooth SPP (RFCOMM socket, no root) | Linux | ✔ MP583 prints; link kept open between jobs |
+| Windows usbprint (SetupAPI + overlapped I/O) | Windows | CI-tested, unverified with a printer |
+| Windows COM ports (Bluetooth SPP, USB CDC) | Windows | CI-tested, unverified with a printer |
 | Android USB host (Kotlin channel) | Android | compiled, awaits hardware |
-| BLE (`universal_ble`) | all incl. iOS & Web | awaits hardware |
+| BLE (`universal_ble`) | all incl. iOS & Web | MP583 BLE blocked by BlueZ dual-mode on Linux |
 | Raw TCP 9100 | all but Web | awaits LAN model |
 | Debug dump (`THERMAL_PHOTO_DUMP=file`) | desktop | ✔ integration-tested |
+
+### Bluetooth on Linux: slow-to-answer printers
+
+The MP583 takes ~4.5 s to answer a Bluetooth connection request, right at
+the kernel's default 5.12 s page timeout, so single attempts often fail
+with "Host is down". The app retries and keeps the link open for 3 minutes
+between prints. If connecting is still flaky, raise the page timeout to
+10.24 s (resets when the adapter is power-cycled or replugged):
+
+```sh
+sudo hciconfig hci0 pageto 16384
+```
+
+(BlueZ's `PageTimeout=` in `/etc/bluetooth/main.conf` is ignored by kernel
+6.8, see docs/REVERSE_ENGINEERING_LOG.md §17.)
 
 ## How printing works
 
