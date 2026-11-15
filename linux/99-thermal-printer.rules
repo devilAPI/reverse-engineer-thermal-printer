@@ -1,0 +1,7 @@
+# Give logged-in users raw access to cheap ESC/POS thermal printers (no driver needed).
+# Install: sudo cp 99-thermal-printer.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+# USB printer class (usblp -> /dev/usb/lp*) and raw libusb access
+SUBSYSTEM=="usbmisc", KERNEL=="lp[0-9]*", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{bDeviceClass}=="00", ATTRS{idVendor}=="0416|0483|0493|1cbe|1cb0|1659|0fe6|28e9|1fc9|6868", TAG+="uaccess"
+# CDC-ACM serial printers (/dev/ttyACM*)
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{idVendor}=="0416|0483|0493|1cbe|1cb0|1659|0fe6|28e9|1fc9|6868", TAG+="uaccess"

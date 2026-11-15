@@ -1,0 +1,4 @@
+# Vendor material (proprietary, not redistributable)
+*.rar
+*.pdf
+vendor/
