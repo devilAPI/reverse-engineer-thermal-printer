@@ -42,6 +42,7 @@ dependencies:
   http: ^1.6.0
   barcode: ^2.2.9
   qr: ^3.0.3
+  dbus: ^0.8.0
 
 dev_dependencies:
   flutter_test:

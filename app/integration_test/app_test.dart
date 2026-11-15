@@ -18,7 +18,11 @@ import 'package:thermal_photo/transport/libusb_transport.dart';
 Future<void> pumpUntil(WidgetTester t, bool Function() cond, {Duration timeout = const Duration(seconds: 30)}) async {
   final end = DateTime.now().add(timeout);
   while (!cond()) {
-    if (DateTime.now().isAfter(end)) throw TestFailure('timed out');
+    if (DateTime.now().isAfter(end)) {
+      // Show what is on screen to make timeouts debuggable.
+      final texts = find.byType(Text).evaluate().map((e) => (e.widget as Text).data).whereType<String>().toSet();
+      throw TestFailure('timed out; visible texts: ${texts.join(' | ')}');
+    }
     await t.pump(const Duration(milliseconds: 200));
   }
 }

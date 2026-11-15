@@ -24,14 +24,19 @@ class LinuxRfcommTransport implements PrinterTransport {
   Future<List<PrinterEndpoint>> discover() async {
     final ProcessResult list;
     try {
-      list = await Process.run('bluetoothctl', ['devices', 'Paired']);
-    } on ProcessException {
-      return const [];
+      list = await Process.run('bluetoothctl', ['devices', 'Paired']).timeout(const Duration(seconds: 4));
+    } on Object {
+      return const []; // not installed, or BlueZ not answering
     }
     final out = <PrinterEndpoint>[];
     for (final m in RegExp(r'^Device ([0-9A-F:]{17}) (.*)$', multiLine: true).allMatches('${list.stdout}')) {
       final mac = m.group(1)!, alias = m.group(2)!.trim();
-      final info = await Process.run('bluetoothctl', ['info', mac]);
+      final ProcessResult info;
+      try {
+        info = await Process.run('bluetoothctl', ['info', mac]).timeout(const Duration(seconds: 4));
+      } on Object {
+        continue;
+      }
       if (!'${info.stdout}'.contains('00001101-0000-1000-8000-00805f9b34fb')) continue;
       out.add(PrinterEndpoint(transport: name, id: mac, label: 'Bluetooth $alias (SPP)'));
     }

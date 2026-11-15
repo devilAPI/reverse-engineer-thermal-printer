@@ -47,7 +47,10 @@ class _ReceiptPageState extends State<ReceiptPage> {
   int _renderSeq = 0;
   Timer? _renderTimer;
   Timer? _saveTimer;
-  late int _width = _printer.profile.dotsPerLine;
+  /// Width of the last rendered preview. Set in initState: a lazy `late`
+  /// initialiser here was first read *after* a model change, so the change
+  /// was never seen and the preview stayed at the old width.
+  late int _width;
   bool _actualSize = false;
   final _scroll = ScrollController();
   final _selectedKey = GlobalKey();
@@ -67,6 +70,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
   @override
   void initState() {
     super.initState();
+    _width = _printer.profile.dotsPerLine;
     _editor.addListener(_onDocChanged);
     _printer.addListener(_onPrinterChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _render());

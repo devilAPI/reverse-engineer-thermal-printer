@@ -347,15 +347,15 @@ class Win32 {
 
   /// One overlapped transfer. Returns bytes transferred, or -1 on timeout
   /// (the request is cancelled before returning). Throws on other errors.
-  int _io(Arena arena, int h, Pointer<Uint8> buf, int len, Duration timeout, {required bool write}) {
+  int _io(Arena arena, int h, Pointer<Uint8> buf, int len, Duration timeout, {required bool write, int offset = 0}) {
     final ev = _createEvent(nullptr, 1, 0, nullptr);
     if (ev == 0) throw StateError('CreateEvent failed: error ${_getLastError()}');
     try {
       final ov = arena<_Overlapped>()
         ..ref.internal = 0
         ..ref.internalHigh = 0
-        ..ref.offset = 0
-        ..ref.offsetHigh = 0
+        ..ref.offset = offset & 0xFFFFFFFF
+        ..ref.offsetHigh = offset >> 32
         ..ref.hEvent = ev;
       final n = arena<Uint32>()..value = 0;
       final ok = write ? _writeFile(h, buf, len, nullptr, ov) : _readFile(h, buf, len, nullptr, ov);
