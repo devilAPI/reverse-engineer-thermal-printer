@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'ui/home_page.dart';
+import 'ui/app_shell.dart';
 
 /// Desktop: `thermal_photo [image]` opens the image directly ("Open with").
 void main(List<String> args) => runApp(ThermalPhotoApp(initialImage: args.where((a) => !a.startsWith('-')).firstOrNull));
@@ -16,7 +16,7 @@ class ThermalPhotoApp extends StatelessWidget {
       title: 'Thermal Photo',
       theme: ThemeData(colorSchemeSeed: Colors.blueGrey, useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: Colors.blueGrey, brightness: Brightness.dark, useMaterial3: true),
-      home: HomePage(initialImage: initialImage),
+      home: AppShell(initialImage: initialImage),
     );
   }
 }
