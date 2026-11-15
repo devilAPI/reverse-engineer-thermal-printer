@@ -335,6 +335,8 @@ Fix in `linux_rfcomm_transport.dart`:
    HUP/ERR and drains stale input first). Measured: first connect 2.8 s,
    next three jobs connect in 45–48 ms with status `0x12`.
 
+Verified by the user in the release app: MP583 printed fine over SPP.
+
 ## Next: hardware session (to do)
 
 Setup once:
