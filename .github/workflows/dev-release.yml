@@ -169,7 +169,8 @@ jobs:
   web-e2e:
     name: Web e2e (Chromium, Firefox, WebKit)
     needs: build-web
-    runs-on: ubuntu-latest
+    # Playwright 1.56 has no browser builds for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
