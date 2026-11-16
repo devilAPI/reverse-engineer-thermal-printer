@@ -74,7 +74,9 @@ class BridgeTransport implements PrinterTransport, PairableTransport {
   Future<PrinterEndpoint?> pair() async {
     if (mixedContentBlocked) {
       // Must happen synchronously in the click, or Safari blocks the popup.
-      openWindow(Uri.parse('http://127.0.0.1:$bridgePort/').toString());
+      // Same page (e.g. /reverse-engineer-thermal-printer/dev/) from the bridge.
+      final path = Uri.base.path.startsWith(webAppPath) ? Uri.base.path : '/';
+      openWindow('http://127.0.0.1:$bridgePort$path');
       throw StateError('Safari doesn\'t let https pages talk to the desktop app, so the copy served by the '
           'desktop app was opened (http://127.0.0.1:$bridgePort). Print from that tab. '
           'Nothing opened? Start Thermal Photo (desktop) with "Web bridge" on, then reload it.');
