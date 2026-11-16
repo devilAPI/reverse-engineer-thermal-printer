@@ -166,6 +166,54 @@ jobs:
           path: app/dist/*
           if-no-files-found: error
 
+  web-e2e:
+    name: Web e2e (Chromium, Firefox, WebKit)
+    needs: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-web
+          path: app/dist
+      - name: Install Playwright
+        working-directory: tools
+        run: |
+          npm init -y > /dev/null
+          npm i playwright@1.56.1
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Run browser tests
+        env:
+          PLAYWRIGHT_DIR: ${{ github.workspace }}/tools/node_modules
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          mkdir -p build/web "$site/reverse-engineer-thermal-printer"
+          unzip -q dist/*-web.zip -d build/web
+          # copy as GitHub Pages serves it (the bridge proxies this path)
+          cp -r build/web/. "$site/reverse-engineer-thermal-printer/"
+          sed -i 's|<base href="/">|<base href="/reverse-engineer-thermal-printer/">|' "$site/reverse-engineer-thermal-printer/index.html"
+          (cd build/web && python3 -m http.server 8099 --bind 127.0.0.1 > /dev/null 2>&1 &)
+          (cd "$site" && python3 -m http.server 8098 --bind 127.0.0.1 > /dev/null 2>&1 &)
+          flutter pub get
+          BRIDGE_E2E_SECONDS=900 THERMAL_PHOTO_DUMP="$RUNNER_TEMP/job.bin" THERMAL_PHOTO_WEB_UPSTREAM=http://127.0.0.1:8098 \
+            flutter test test/bridge_test.dart --plain-name 'e2e harness' > "$RUNNER_TEMP/bridge.log" 2>&1 &
+          for i in $(seq 1 120); do curl -sf -o /dev/null http://127.0.0.1:9632/v1/printers && break; sleep 1; done
+          curl -sf http://127.0.0.1:9632/v1/printers
+          node ../tools/web_e2e.mjs http://localhost:8099/ chromium --mock-devices
+          node ../tools/web_e2e.mjs http://localhost:8099/ chromium firefox webkit
+          node ../tools/web_e2e.mjs http://127.0.0.1:9632/ chromium firefox webkit
+          node ../tools/web_e2e.mjs https://devilapi.github.io/ --serve-as=build/web firefox webkit
+          test -s "$RUNNER_TEMP/job.bin"
+
   build-windows:
     name: Build Windows
     # Flutter 3.35 does not know the Visual Studio on windows-latest yet
@@ -253,7 +301,7 @@ jobs:
 
   release:
     name: Publish ${{ github.run_number }} as dev-${{ github.run_number }}
-    needs: [test-app, build-android, build-linux, build-web, build-windows, build-macos, build-ios]
+    needs: [test-app, build-android, build-linux, build-web, web-e2e, build-windows, build-macos, build-ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
