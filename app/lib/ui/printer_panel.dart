@@ -117,7 +117,8 @@ class _PrinterPanelState extends State<PrinterPanel> {
             dense: true,
             title: const Text('Web bridge'),
             subtitle: Text(c.bridge.running
-                ? 'The web app (any browser) can print here via 127.0.0.1:9632'
+                ? 'Any browser can print here: open http://127.0.0.1:9632 (needed for Safari), '
+                    'or press "Use desktop app" in the web app'
                 : (c.bridge.error ?? 'Off — the web app can only use browser Bluetooth/USB')),
             value: c.bridge.running,
             onChanged: c.setBridge,
