@@ -75,6 +75,10 @@ class Prefs {
   String? get savedReceipts => _p.getString('receipt.saved');
   set savedReceipts(String? v) => _set('receipt.saved', v);
 
+  /// Desktop: serve the web bridge on 127.0.0.1 (bridge_server.dart).
+  bool get bridge => _p.getBool('bridge') ?? !testMode;
+  set bridge(bool v) => _p.setBool('bridge', v);
+
   void _set(String k, Object? v) {
     switch (v) {
       case null:

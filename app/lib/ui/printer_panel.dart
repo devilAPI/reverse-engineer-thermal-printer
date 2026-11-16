@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/mono_bitmap.dart';
 import '../core/printer_profile.dart';
 import '../transport/transport.dart';
+import '../transport/transports.dart' show platformNote;
 import 'printer_controller.dart';
 
 /// Model + connection selection, test page and status buttons.
@@ -89,6 +90,38 @@ class _PrinterPanelState extends State<PrinterPanel> {
             tooltip: 'Scan for printers',
           ),
         ]),
+        if (c.pairable.isNotEmpty) ...[
+          if (platformNote() case final note?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(note, style: Theme.of(context).textTheme.bodySmall),
+            ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final t in c.pairable)
+              Tooltip(
+                message: t.pairHint,
+                child: FilledButton.tonalIcon(
+                  // Must call pair() synchronously from the click: browsers
+                  // only open device choosers during a user gesture.
+                  onPressed: c.busy ? null : () => c.pair(t),
+                  icon: Icon(_pairIcon((t as PrinterTransport).name)),
+                  label: Text(t.pairLabel),
+                ),
+              ),
+          ]),
+        ],
+        if (c.bridge.supported)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Web bridge'),
+            subtitle: Text(c.bridge.running
+                ? 'The web app (any browser) can print here via 127.0.0.1:9632'
+                : (c.bridge.error ?? 'Off — the web app can only use browser Bluetooth/USB')),
+            value: c.bridge.running,
+            onChanged: c.setBridge,
+          ),
         if (!kIsWeb)
           TextField(
             controller: _hostCtl,
@@ -112,6 +145,13 @@ class _PrinterPanelState extends State<PrinterPanel> {
     );
   }
 }
+
+IconData _pairIcon(String transport) => switch (transport) {
+      'webserial' => Icons.bluetooth,
+      'webble' => Icons.bluetooth_searching,
+      'webusb' => Icons.usb,
+      _ => Icons.computer,
+    };
 
 /// Darkness, cut and copies (JobOptions).
 class OutputPanel extends StatelessWidget {

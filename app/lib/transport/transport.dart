@@ -69,3 +69,25 @@ Future<void> sendChunked(
 abstract class PrinterStatusReader {
   Future<Uint8List> read({Duration timeout = const Duration(milliseconds: 500)});
 }
+
+/// Optional capability: transports that must ask the user to pick a device
+/// (browser device choosers: Web Serial, WebUSB, Web Bluetooth). [pair] must
+/// be called directly from a click handler — browsers require a user gesture.
+abstract class PairableTransport {
+  /// Button text, e.g. "Add Bluetooth / serial printer".
+  String get pairLabel;
+
+  /// One line shown next to the button (where it works, what to pick).
+  String get pairHint;
+
+  /// Opens the chooser; returns the picked printer, or null if cancelled.
+  Future<PrinterEndpoint?> pair();
+}
+
+/// Optional capability: connections that forward a whole job to another
+/// program which does chunking and the status query itself (the web
+/// bridge). Returns that program's result message.
+abstract class WholeJobConnection {
+  Future<String> sendJob(Uint8List job, String what);
+  Future<String> status();
+}

@@ -40,9 +40,20 @@ class LinuxRfcommTransport implements PrinterTransport {
         continue;
       }
       if (!'${info.stdout}'.contains('00001101-0000-1000-8000-00805f9b34fb')) continue;
+      if (_notAPrinter('${info.stdout}')) continue;
       out.add(PrinterEndpoint(transport: name, id: mac, label: 'Bluetooth $alias (SPP)'));
     }
     return out;
+  }
+
+  /// Major device classes that offer SPP but are never printers: computer,
+  /// phone, audio/video (speakers like the Emberton II list SPP), HID,
+  /// wearable, toy. Printers are "imaging" (MP583: 0x040680) or unclassified.
+  static bool _notAPrinter(String info) {
+    final m = RegExp(r'Class: 0x([0-9a-fA-F]+)').firstMatch(info);
+    if (m == null) return false;
+    final major = (int.parse(m.group(1)!, radix: 16) >> 8) & 0x1f;
+    return const {1, 2, 4, 5, 7, 8}.contains(major);
   }
 
   @override
@@ -83,10 +94,24 @@ class _RfcommConnection implements PrinterConnection, PrinterStatusReader {
       if (r >= 0) return _RfcommConnection(r, mac);
       err = -r;
       if (err != _ehostdown && err != _etimedout && err != _ehostunreach) break;
+      if (err == _ehostunreach && await _adapterOff()) {
+        throw StateError('Bluetooth is switched off on this computer — turn it on and try again.');
+      }
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
     throw StateError('RFCOMM connect to $mac failed (errno $err${err == _ehostdown ? ', host is down' : ''}) — '
         'printer off, out of range, or not paired? (Slow to answer? see README: Bluetooth on Linux)');
+  }
+
+  /// EHOSTUNREACH comes instantly when the adapter is powered off (or still
+  /// powering up after a toggle).
+  static Future<bool> _adapterOff() async {
+    try {
+      final r = await Process.run('bluetoothctl', ['show']).timeout(const Duration(seconds: 3));
+      return '${r.stdout}'.contains('Powered: no');
+    } on Object {
+      return false;
+    }
   }
 
   /// True if the socket is still connected; drains stale input.

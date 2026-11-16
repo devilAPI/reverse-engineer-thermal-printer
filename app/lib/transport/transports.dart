@@ -6,3 +6,6 @@ import 'transports_stub.dart'
 /// All transports usable on the running platform.
 List<PrinterTransport> availableTransports({List<String> manualHosts = const []}) =>
     impl.platformTransports(manualHosts: manualHosts).where((t) => t.isSupported).toList();
+
+/// Platform/browser limits worth showing to the user, or null.
+String? platformNote() => impl.platformNote();

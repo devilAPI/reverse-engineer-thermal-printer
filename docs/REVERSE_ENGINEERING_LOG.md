@@ -337,6 +337,50 @@ Fix in `linux_rfcomm_transport.dart`:
 
 Verified by the user in the release app: MP583 printed fine over SPP.
 
+### 18. Web: why Bluetooth never worked, and Firefox/Safari via a bridge
+
+User: "in no chrome or firefox is bluetooth connection working".
+
+- Old web build: `universal_ble`'s `startScan()` calls
+  `navigator.bluetooth.requestDevice()`, and the app ran it from the
+  automatic startup scan. Browsers only open choosers after a click, so it
+  always failed. Also, Linux Chrome hides Web Bluetooth behind a flag, and
+  BlueZ refuses LE to the dual-mode MP583 (§15).
+- Firefox and Safari have no Web Serial, WebUSB or Web Bluetooth.
+- New: own js_interop transports (`lib/transport/web/`) started from "Add …"
+  buttons:
+  - **Web Serial**: Bluetooth SPP + USB CDC; the MP583 path.
+  - **WebUSB**: the HZ-8360.
+  - **Web Bluetooth**: GATT.
+  Tested in Chromium with mocked `navigator.serial`/`usb`/`bluetooth`
+  (`tools/web_e2e.mjs --mock-devices`):
+  - serial: 6258 B written, status 0x12 read back;
+  - USB: 9325 B, the model auto-switched to HZ-8360 from 0416:5011;
+  - BLE: 6246 B.
+- **Web bridge:** the desktop app serves 127.0.0.1:9632 (docs/WEB.md).
+  Results for `https://devilapi.github.io` (served from disk by Playwright
+  routing) calling `http://127.0.0.1:9632`:
+
+  | Engine | Result |
+  |---|---|
+  | Firefox | ✔ prints (127.0.0.1 counts as secure) |
+  | Chromium | blocked headless: "Permission was denied for this request to access the `unknown` address space" (Local Network Access; real Chrome prompts) |
+  | WebKit | ✘ `[blocked] The page at https://devilapi.github.io/ requested insecure content from http://127.0.0.1:9632/v1/printers` (mixed content) |
+
+  So the bridge also proxies the web app from Pages at
+  `http://127.0.0.1:9632/reverse-engineer-thermal-printer/`, giving one
+  origin. Chromium, Firefox and WebKit all printed the test page there. On
+  the https site, Safari gets a hand-off tab to that address.
+- Found on the way:
+  - The local web build used a stale plugin registrant without
+    shared_preferences ("SharedPreferencesAsyncPlatform instance must be
+    set"). CI builds clean, so the deployed site was not affected.
+  - The speaker "EMBERTON II" offers SPP and was listed as a printer. Paired
+    devices are now filtered by Bluetooth major class (audio/phone/computer/
+    HID dropped; MP583 = 0x040680 "imaging").
+  - An instant `EHOSTUNREACH` (errno 113) means the PC's adapter is off. The
+    app now says so instead of retrying.
+
 ## Next: hardware session (to do)
 
 Setup once:

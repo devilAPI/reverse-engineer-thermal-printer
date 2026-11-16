@@ -32,9 +32,19 @@ Chinese ESC/POS thermal receipt printers. Targets:
 | Windows usbprint (SetupAPI + overlapped I/O) | Windows | CI-tested, unverified with a printer |
 | Windows COM ports (Bluetooth SPP, USB CDC) | Windows | CI-tested, unverified with a printer |
 | Android USB host (Kotlin channel) | Android | compiled, awaits hardware |
-| BLE (`universal_ble`) | all incl. iOS & Web | MP583 BLE blocked by BlueZ dual-mode on Linux |
+| BLE (`universal_ble`) | Android, iOS, macOS, Windows, Linux | MP583 BLE blocked by BlueZ dual-mode on Linux |
+| Web Serial / WebUSB / Web Bluetooth | Chrome, Edge (web) | mock-tested in Chromium, see docs/WEB.md |
+| Web bridge (desktop app on 127.0.0.1:9632) | every browser incl. Firefox & Safari | ✔ e2e-tested in Chromium, Firefox, WebKit |
 | Raw TCP 9100 | all but Web | awaits LAN model |
 | Debug dump (`THERMAL_PHOTO_DUMP=file`) | desktop | ✔ integration-tested |
+
+### Web app: which browser?
+
+Chrome/Edge talk to printers directly (Web Serial for the MP583 over
+Bluetooth, WebUSB). Firefox and Safari have no device APIs. They print
+through the desktop app's **web bridge**: run the desktop app and press "Use
+desktop app" in the web app, or open http://127.0.0.1:9632 (Safari needs
+this). Details: [docs/WEB.md](docs/WEB.md).
 
 ### Bluetooth on Linux: slow-to-answer printers
 

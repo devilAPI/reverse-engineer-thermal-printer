@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'photo_page.dart';
@@ -31,11 +30,11 @@ class _AppShellState extends State<AppShell> {
     await _printer.loadPrefs();
     if (!mounted) return;
     setState(() => _ready = true);
-    // Web Bluetooth needs a user gesture to scan; don't auto-scan there.
-    if (!kIsWeb) {
-      await _printer.scan();
-      _printer.startHotplug();
-    }
+    // Discovery never opens a browser chooser (that needs a click: "Add
+    // printer" buttons), so scanning on start is safe on the web too.
+    await _printer.startBridgeIfEnabled();
+    await _printer.scan();
+    _printer.startHotplug();
   }
 
   @override
@@ -107,7 +106,9 @@ class _AppShellState extends State<AppShell> {
         top: false,
         child: ListTile(
           dense: true,
-          title: Text(s),
+          // Live region: screen readers announce progress/errors (also what
+          // tools/web_e2e.mjs reads in the browser).
+          title: Semantics(liveRegion: true, label: 'Status: $s', excludeSemantics: true, child: Text(s)),
           trailing: IconButton(
             icon: const Icon(Icons.close),
             tooltip: 'Dismiss',

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../bridge/bridge_host.dart';
 import '../core/print_job.dart';
 import '../core/printer_profile.dart';
 import '../core/status.dart';
@@ -14,11 +15,17 @@ import 'prefs.dart';
 /// tabs: model (profile), connection (endpoint), job options (darkness, cut,
 /// copies), progress and the status line.
 class PrinterController extends ChangeNotifier {
+  /// [transports] replaces platform discovery (tests).
+  PrinterController({List<PrinterTransport>? transports}) : _fixed = transports {
+    _transports = transports ?? availableTransports();
+  }
+
+  final List<PrinterTransport>? _fixed;
   Prefs? prefs;
   PrinterProfile profile = PrinterProfile.mp583;
   JobOptions job = const JobOptions();
 
-  List<PrinterTransport> _transports = availableTransports();
+  late List<PrinterTransport> _transports;
   List<PrinterEndpoint> endpoints = [];
   PrinterEndpoint? endpoint;
   String host = '';
@@ -29,6 +36,21 @@ class PrinterController extends ChangeNotifier {
   String? status;
 
   bool get canPrint => !busy && endpoint != null;
+
+  /// Desktop: lets the web app print through this app (see bridge_server.dart).
+  late final BridgeHost bridge = BridgeHost(this);
+
+  Future<void> setBridge(bool on) async {
+    prefs?.bridge = on;
+    on ? await bridge.start() : await bridge.stop();
+    if (on && bridge.error != null) status = bridge.error;
+    notifyListeners();
+  }
+
+  /// Start the bridge if the user wants it (default on for desktop).
+  Future<void> startBridgeIfEnabled() async {
+    if (bridge.supported && (prefs?.bridge ?? false)) await setBridge(true);
+  }
 
   /// Load persisted choices. Never throws (prefs may be unavailable).
   Future<void> loadPrefs() async {
@@ -76,7 +98,7 @@ class PrinterController extends ChangeNotifier {
       host = manualHost.trim();
       prefs?.host = host;
     }
-    _transports = availableTransports(manualHosts: host.isEmpty ? const [] : [host]);
+    _transports = _fixed ?? availableTransports(manualHosts: host.isEmpty ? const [] : [host]);
     scanning = true;
     notifyListeners();
     final found = <PrinterEndpoint>[];
@@ -89,13 +111,17 @@ class PrinterController extends ChangeNotifier {
     }
     scanning = false;
     _applyEndpoints(found);
-    if (found.isEmpty) status = 'No printer found. Plug it in / switch it on, then refresh.';
+    if (found.isEmpty) {
+      status = pairable.isNotEmpty
+          ? 'No printer added yet — use the "Add …" buttons (the browser asks which device).'
+          : 'No printer found. Plug it in / switch it on, then refresh.';
+    }
     notifyListeners();
   }
 
   /// Transports whose discovery is instant and local (USB/device nodes):
   /// polled every few seconds so plug/unplug shows up without Refresh.
-  static const _cheap = {'libusb', 'device', 'usbprint', 'com', 'usb', 'dump'};
+  static const _cheap = {'libusb', 'device', 'usbprint', 'com', 'usb', 'dump', 'webserial', 'webusb'};
   Timer? _hotplug;
 
   void startHotplug() {
@@ -105,6 +131,7 @@ class PrinterController extends ChangeNotifier {
   @override
   void dispose() {
     _hotplug?.cancel();
+    bridge.stop();
     super.dispose();
   }
 
@@ -154,6 +181,12 @@ class PrinterController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Error text without Dart's "Bad state: " / "Exception: " prefixes.
+  static String errorText(Object e) => switch (e) {
+        StateError(:final message) => message,
+        _ => '$e'.replaceFirst(RegExp(r'^(Exception|Bad state): '), ''),
+      };
+
   static String _key(PrinterEndpoint e) => '${e.transport}|${e.id}';
 
   PrinterTransport _transportFor(PrinterEndpoint ep) => _transports.firstWhere((t) => t.name == ep.transport);
@@ -163,6 +196,13 @@ class PrinterController extends ChangeNotifier {
   Future<bool> send(Uint8List job, String what) async {
     final ep = endpoint;
     if (ep == null || busy) return false;
+    return (await sendTo(ep, job, what)).$1;
+  }
+
+  /// Send [job] to [ep] (the selected printer, or one named by the web
+  /// bridge). Returns (ok, message); the message is also shown as status.
+  Future<(bool, String)> sendTo(PrinterEndpoint ep, Uint8List job, String what) async {
+    if (busy) return (false, 'Printer is busy with another job.');
     busy = true;
     progress = 0;
     status = 'Connecting to ${ep.label}…';
@@ -172,6 +212,10 @@ class PrinterController extends ChangeNotifier {
     try {
       conn = await _transportFor(ep).open(ep);
       setStatus('Sending $what (${(job.length / 1024).toStringAsFixed(1)} KiB)…');
+      if (conn is WholeJobConnection) {
+        status = await (conn as WholeJobConnection).sendJob(job, what);
+        return (true, status!);
+      }
       final sw = Stopwatch()..start();
       await sendChunked(
         conn,
@@ -192,15 +236,52 @@ class PrinterController extends ChangeNotifier {
       }
       status = msg;
     } on Object catch (e) {
-      status = 'Failed: $e';
+      status = 'Failed: ${errorText(e)}';
     } finally {
       await conn?.close();
       busy = false;
       progress = null;
       notifyListeners();
     }
-    return ok;
+    return (ok, status ?? '');
   }
+
+  /// Status of [ep] as text (used by the Status button and the web bridge).
+  Future<(bool, String)> statusOf(PrinterEndpoint ep) async {
+    if (busy) return (false, 'Printer is busy with another job.');
+    PrinterConnection? conn;
+    try {
+      conn = await _transportFor(ep).open(ep);
+      if (conn is WholeJobConnection) {
+        final msg = await (conn as WholeJobConnection).status();
+        return (true, msg);
+      }
+      if (conn is! PrinterStatusReader) return (false, 'This connection cannot read status (write-only).');
+      final st = await queryStatus(conn.write, (conn as PrinterStatusReader).read);
+      return (true, 'Printer: $st');
+    } on Object catch (e) {
+      return (false, 'Status failed: ${errorText(e)}');
+    } finally {
+      await conn?.close();
+    }
+  }
+
+  /// Pair a printer through a browser chooser (must run from a click).
+  Future<void> pair(PairableTransport t) async {
+    try {
+      final e = await t.pair();
+      if (e == null) return;
+      final others = endpoints.where((x) => x != e).toList();
+      endpoints = [...others, e];
+      selectEndpoint(e);
+      status = 'Added "${e.label}".';
+    } on Object catch (err) {
+      status = 'Could not add printer: ${errorText(err)}';
+    }
+    notifyListeners();
+  }
+
+  List<PairableTransport> get pairable => [for (final t in _transports) if (t is PairableTransport) t as PairableTransport];
 
   Future<void> printTest() => send(buildTestPage(profile), 'test page');
 
@@ -208,19 +289,6 @@ class PrinterController extends ChangeNotifier {
     final ep = endpoint;
     if (ep == null) return;
     setStatus('Querying status…');
-    PrinterConnection? conn;
-    try {
-      conn = await _transportFor(ep).open(ep);
-      if (conn is! PrinterStatusReader) {
-        setStatus('This connection cannot read status (write-only).');
-        return;
-      }
-      final st = await queryStatus(conn.write, (conn as PrinterStatusReader).read);
-      setStatus('Printer: $st');
-    } on Object catch (e) {
-      setStatus('Status failed: $e');
-    } finally {
-      await conn?.close();
-    }
+    setStatus((await statusOf(ep)).$2);
   }
 }

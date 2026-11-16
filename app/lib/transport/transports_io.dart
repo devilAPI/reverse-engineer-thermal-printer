@@ -66,3 +66,5 @@ class _BlueZChecked implements PrinterTransport {
     return _inner.open(endpoint);
   }
 }
+
+String? platformNote() => null;
